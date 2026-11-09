@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/illager_shieldbearer_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}

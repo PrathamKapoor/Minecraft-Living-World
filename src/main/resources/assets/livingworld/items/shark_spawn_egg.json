@@ -1,0 +1,6 @@
+{
+    "model":  {
+                  "model":  "livingworld:item/shark_spawn_egg",
+                  "type":  "minecraft:model"
+              }
+}

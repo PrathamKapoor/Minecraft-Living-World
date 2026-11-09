@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/shark_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}

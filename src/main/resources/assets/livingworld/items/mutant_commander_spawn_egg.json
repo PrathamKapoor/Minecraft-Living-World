@@ -1,0 +1,6 @@
+{
+    "model":  {
+                  "model":  "livingworld:item/mutant_commander_spawn_egg",
+                  "type":  "minecraft:model"
+              }
+}

@@ -1,0 +1,6 @@
+{
+    "model":  {
+                  "model":  "livingworld:item/village_guard_spawn_egg",
+                  "type":  "minecraft:model"
+              }
+}

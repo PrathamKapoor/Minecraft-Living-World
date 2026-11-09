@@ -1,0 +1,6 @@
+{
+    "model":  {
+                  "model":  "livingworld:item/illager_shieldbearer_spawn_egg",
+                  "type":  "minecraft:model"
+              }
+}

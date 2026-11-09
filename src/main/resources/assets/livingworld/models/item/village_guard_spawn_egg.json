@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/village_guard_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}
