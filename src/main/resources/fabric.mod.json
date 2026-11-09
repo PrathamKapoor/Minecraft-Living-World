@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "livingworld",
+  "version": "0.2.4",
+  "name": "Minecraft: Living World — Civilizations",
+  "description": "Full-scale playable Minecraft Java Edition living sandbox overhaul.",
+  "authors": [
+    "Pratham Kapoor"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/livingworld/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "livingworld.LivingWorldMod"
+    ],
+    "client": [
+      "livingworld.client.LivingWorldClientMod"
+    ]
+  },
+  "mixins": [
+    "livingworld.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.20.0",
+    "minecraft": ">=26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
