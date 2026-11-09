@@ -1,0 +1,56 @@
+# Prism Launcher binaries & system files (top-level only)
+/*.exe
+/*.dll
+/*.cfg
+/*.ini
+/*.zip
+/accounts.json
+/assets/
+/catpacks/
+/iconengines/
+/icons/
+/iconthemes/
+/imageformats/
+/instances/
+/jars/
+/java/
+/libraries/
+/meta/
+/metacache
+/platforms/
+/prism_launcher_update_release/
+/styles/
+/themes/
+/tls/
+/translations/
+/cache/
+
+# Local build outputs
+/build/
+/bin/
+/out/
+.gradle/
+*.log
+/logs/
+
+# Local backup points & scratch
+/backup_*/
+/Minecraft*/
+/tools/
+/temp_decompile/
+/temp_src_backup/
+
+# Internal prompts & launcher update files
+/MASTER_PROMPT.md
+/.prism_launcher_update*
+/manifest.txt
+/portable.txt
+/qtlogging.ini
+/qt.conf
+
+# IDE & OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
