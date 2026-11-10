@@ -1,27 +1,71 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-10T17:00:00Z
-- Active milestone/task: Integrated Server Watchdog Deadlock Elimination & Chunk-Bounded Scar Slicing — COMPLETE
-- Last known passing build: STEP 0023 (livingworld-0.2.6.jar with 78 classes, 357,654 bytes; 78/78 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
+- UTC time: 2026-11-10T18:35:00Z
+- Active milestone/task: Version 0.2.7 The Siege & Settlement Reliability Update — COMPLETE
+- Last known passing build: STEP 0024 (livingworld-0.2.7.jar with 78 classes, 380,764 bytes; 88/88 acceptance tests passed; 8/8 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
 - Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
-- Rollback Point Established: `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
+- Rollback Point Established: `backup_v0.2.6/livingworld-0.2.6.jar` (Length: 357,654 bytes)
 - Prior Rollback Points:
+  - `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
   - `backup_v0.2.4/livingworld-0.2.4.jar` (SHA256: 307A4C2E58C930E2E231150EBBDB2F5D7B6018EF470FF7D8F8819619B156CEDB)
   - `backup_v0.2.3/livingworld-0.2.3.jar` (SHA256: 2CAF4C7AC48EE44D0DDE1C7D0B7D28854A5893347D01576D1E7182D4341CEFBF)
   - `backup_v0.2.2/livingworld-0.2.2.jar` (SHA256: 2E79A77A764951F434F15AAF50F71F3DBDC51F8560215E9B73A2456E6F218B00)
   - `backup_v0.2.1/livingworld-0.2.1.jar` (SHA256: CB7A121B050601418FEDAC95AFC7C038468EC6A2C27C97A044774363CF1028A3)
   - `backup_v0.2.0/livingworld-0.2.0.jar` (SHA256: 96B73EBDB46B6624842469FE5884AE449ADC62D74FE9EED71D0EADA14014B4E0)
-- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar (357,654 bytes)
+- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.7.jar (380,764 bytes)
 - Integrated Dependencies: 20 active Fabric mods in `instances/LivingWorld/minecraft/mods/`
-- Files modified but unverified: None (78/78 acceptance tests & 7/7 gameplay playtest scenarios passed)
+- Files modified but unverified: None (88/88 acceptance tests, 8/8 gameplay scenarios, and 60s in-world Survival quickplay passed)
 - Known blockers: None
 - Critical Constraint: DO NOT PUSH to GitHub until user explicitly sends "PUSH". Local commits strictly under PrathamKapoor <prathamkapoor027@gmail.com>.
-- NEXT ACTION: Awaiting user instruction or explicit "PUSH" command.
+- NEXT ACTION: Stand ready for user gameplay instructions, playtesting feedback, or explicit "PUSH" authorization.
 
 ---
 
 ## CHRONOLOGICAL JOURNAL
+
+### 2026-11-10T18:35:00Z — STEP 0024 — DONE
+Goal: Execute Version 0.2.7 The Siege & Settlement Reliability Update:
+  1. Illager Tactical Objective & Village Bell Assault (DEF-01 & DEF-03): Identify primary bell, register strategic `RaidObjective`, implement 7-state assault machine (`ASSEMBLE -> ADVANCE -> ENGAGE_DEFENDERS -> BREACH -> ATTACK_BELL -> SECURE_VILLAGE -> VICTORY`), physical bell assault strikes (swing animation, metallic sounds, particles, progress accumulation), block destruction (`mobGriefing=true`) or silencing (`mobGriefing=false`), and community material-driven reconstruction consuming 5 stone or 1 iron.
+  2. Stuck Raider Resolution & Navigation Diagnostics (DEF-02): 160m scan radius in `RaidTactics.RaiderDiagnostic`, 3-tiered resolution (200t subterranean surface recovery, 600t glowing effect + horn warning, 1200t failsafe discard for lingering last raiders preventing hanging boss bars).
+  3. Guaranteed Watchtowers & Sentry Lookout Platforms (DEF-04): Periodic watchtower generation in `SettlementManager.tick()` (every 200 ticks) guaranteeing 2 lookout watchtowers with solid cobblestone ladder backing columns, platform at y=10, parapets, and elevated sentry archers.
+  4. Natural Civilian Dogs & Guard Companion Spawning (DEF-06): Implemented `VillageGuardManager.tickSettlementDogs()` maintaining 2-4 civilian dogs and 1 guard companion dog per 4 guards with UUID handler tethering and combat defense.
+  5. Natural Cavalry Recruitment & Outskirts Patrols (DEF-05): Added automated cavalry mobilization when military capacity >= 3; recruits mounted swordsmen, scouts, and captains on persistent saddled, armored horses with mount/dismount combat AI.
+  6. Blueprint Structural Integrity Overhaul (DEF-07): Added `addDoor()` and `addLadder()` helpers to `Blueprint.java`; overhauled blueprints across library (cottage, two-story house, farmhouse, barracks, inn, workshop, warehouse, barn, clinic) with complete solid roofs, zero open sky gaps, functional doors, firmly attached climbing ladders, and authentic two-block beds (`FOOT` + `HEAD`).
+  7. Construction Progress & Stalling Fix: Removed false material check in `Settlement.tacticalTick()` for prepaid projects in queue; anchored foundations with `LivingWorldCommand.fillFoundationColumns()` with `level.isLoaded()` guards.
+  8. Diagnostic Debug Commands: Implemented all 10 requested debug commands under `/livingworld debug raid|village|cavalry|military`.
+  9. Comprehensive Acceptance & Gameplay Testing: Expanded test suite to 88 automated acceptance tests (`scripts/test.ps1` -> 88/88 PASSED); expanded playtest suite to 8 gameplay scenarios (`scripts/test_gameplay.ps1` -> 8/8 PASSED); executed 60-second in-world Survival quickplay on NVIDIA GPU with 0 crashes, 0 errors, and clean shutdown.
+Files Modified/Created:
+  - `src/main/java/livingworld/illager/RaidTactics.java`
+  - `src/main/java/livingworld/settlement/Blueprint.java`
+  - `src/main/java/livingworld/settlement/BlueprintRegistry.java`
+  - `src/main/java/livingworld/settlement/ConstructionProject.java`
+  - `src/main/java/livingworld/settlement/Settlement.java`
+  - `src/main/java/livingworld/settlement/SettlementManager.java`
+  - `src/main/java/livingworld/faction/VillageGuardManager.java`
+  - `src/main/java/livingworld/faction/VillageGolemManager.java`
+  - `src/main/java/livingworld/command/LivingWorldCommand.java`
+  - `src/main/java/livingworld/LivingWorldMod.java`
+  - `src/main/resources/fabric.mod.json`
+  - `scripts/build.ps1`
+  - `src/test/java/livingworld/LivingWorldTests.java`
+  - `src/test/java/livingworld/GameplayPlaytestRunner.java`
+  - `docs/PLAYTEST_DEFECTS_v027.md`
+  - `docs/COMMANDS.md`
+  - `docs/FEATURE_MATRIX.md`
+  - `decisions.md`
+  - `handoff.md`
+  - `flow.md`
+Outcome:
+  - Compiled and packaged `build/libs/livingworld-0.2.7.jar` (380,764 bytes across 78 classes).
+  - Deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.7.jar`.
+  - 88/88 automated acceptance tests passed.
+  - 8/8 gameplay playtest scenarios passed.
+  - 60s in-world Survival quickplay simulation passed with 0 errors.
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Push Hold strictly active. Zero pushes to remote repository. All commits local under `PrathamKapoor <prathamkapoor027@gmail.com>`.
+
+---
 
 ### 2026-11-10T17:00:00Z — STEP 0023 — DONE
 Goal: Eliminate Integrated Server Watchdog Deadlock (`ClientShutdownWatchdog` exit code `-805306369`) during chunk loading and world save/shutdown:

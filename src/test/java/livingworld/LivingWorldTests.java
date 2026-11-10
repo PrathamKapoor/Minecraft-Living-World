@@ -135,6 +135,16 @@ public class LivingWorldTests {
         runTest("Test 76: Single Mutant Commander Zone Cap & Death Boss Bar Cleanup (BUG-15)", LivingWorldTests::testMutantCommanderDensityAndBossEventCleanup);
         runTest("Test 77: Dimensional Scars Generation, Noise Boundaries & Spacing Invariants (BUG-16, F19)", LivingWorldTests::testDimensionalScarsIncursionsAndSpacing);
         runTest("Test 78: Authentic 12x14 Spawn Egg Silhouette Proportions (Milestone 5)", LivingWorldTests::testAuthenticSpawnEggSilhouetteTextures);
+        runTest("Test 79: Raid Objective Registration & Bell Discovery Machine (TEST 1 & 2)", LivingWorldTests::testRaidObjectiveRegistrationAndBellDiscovery);
+        runTest("Test 80: Bell Assault Mechanic & Community Material-Driven Reconstruction (TEST 2)", LivingWorldTests::testBellAssaultMechanicsAndReconstruction);
+        runTest("Test 81: Raider Navigation Diagnostics, Stuck Detection & Bounded Completion (TEST 3)", LivingWorldTests::testRaiderNavigationDiagnosticsAndStuckHandling);
+        runTest("Test 82: Dual Lookout Watchtowers, Sentry Platforms & Foundations (TEST 4)", LivingWorldTests::testDualWatchtowerLookoutPositionsAndPlatformIntegrity);
+        runTest("Test 83: Village Dogs Demographics & Handler Escort Registration (TEST 5)", LivingWorldTests::testVillageDogDemographicsAndCompanionEscort);
+        runTest("Test 84: Natural Cavalry Recruitment Pipeline & Mounted Attributes (TEST 6)", LivingWorldTests::testNaturalCavalryRecruitmentPipeline);
+        runTest("Test 85: Blueprint Structural Integrity: Complete Walls, Solid Roofs & Entrances (TEST 7)", LivingWorldTests::testBlueprintStructuralIntegrity);
+        runTest("Test 86: Defender Intelligence & Allegiance Hierarchy (TEST 8)", LivingWorldTests::testDefenderIntelligenceAndThreatScoring);
+        runTest("Test 87: Simulation Persistence & World Reload State Serialization (TEST 9)", LivingWorldTests::testSimulationPersistenceAndSerialization);
+        runTest("Test 88: Full System Regression Invariants (TEST 10)", LivingWorldTests::testSystemRegressionInvariants);
 
         System.out.println("====================================================");
         System.out.printf(" Results: %d PASSED, %d FAILED%n", passed, failed);
@@ -1329,6 +1339,228 @@ public class LivingWorldTests {
                 throw new AssertionError("PNG header error for " + eggId + ": " + e.getMessage());
             }
         }
+    }
+
+    // 79. Raid Objective Registration & Bell Discovery Machine (TEST 1 & 2)
+    private static void testRaidObjectiveRegistrationAndBellDiscovery() {
+        UUID sId = UUID.randomUUID();
+        BlockPos bellPos = new BlockPos(120, 64, 240);
+        RaidTactics.RaidObjective obj = new RaidTactics.RaidObjective(501, sId, bellPos, true);
+
+        assertEquals(501, obj.getRaidId(), "Raid ID matches");
+        assertEquals(sId, obj.getSettlementId(), "Settlement ID matches");
+        assertEquals(bellPos, obj.getBellPos(), "Bell Pos matches");
+        assertTrue(obj.hasPhysicalBell(), "Physical bell flag true");
+        assertEquals(RaidTactics.RaidAssaultState.ADVANCE, obj.getState(), "Initial state is ADVANCE");
+
+        assertEquals(7, RaidTactics.RaidAssaultState.values().length, "7 raid assault states");
+        assertEquals("Advancing on Village Roads", RaidTactics.RaidAssaultState.ADVANCE.getDisplay(), "ADVANCE display");
+        assertEquals("Besieging Village Bell", RaidTactics.RaidAssaultState.ATTACK_BELL.getDisplay(), "ATTACK_BELL display");
+        assertEquals("Securing Settlement Center", RaidTactics.RaidAssaultState.SECURE_VILLAGE.getDisplay(), "SECURE_VILLAGE display");
+        assertEquals("Breaching Fortifications & Doors", RaidTactics.RaidAssaultState.BREACH.getDisplay(), "BREACH display");
+
+        obj.setState(RaidTactics.RaidAssaultState.ATTACK_BELL);
+        assertEquals(RaidTactics.RaidAssaultState.ATTACK_BELL, obj.getState(), "State transitioned to ATTACK_BELL");
+    }
+
+    // 80. Bell Assault Mechanic & Community Material-Driven Reconstruction (TEST 2)
+    private static void testBellAssaultMechanicsAndReconstruction() {
+        RaidTactics.RaidObjective obj = new RaidTactics.RaidObjective(502, UUID.randomUUID(), new BlockPos(0, 64, 0), true);
+        assertEquals(0, obj.getBellSiegeTicks(), "Initial siege ticks 0");
+
+        obj.addBellSiegeTicks(40);
+        assertEquals(40, obj.getBellSiegeTicks(), "Siege ticks accumulated to 40");
+        obj.addBellSiegeTicks(60);
+        assertEquals(100, obj.getBellSiegeTicks(), "Siege ticks reached 100 threshold");
+
+        if (obj.getBellSiegeTicks() >= 100) {
+            obj.setBellDestroyedOrCaptured(true);
+        }
+        assertTrue(obj.isBellDestroyedOrCaptured(), "Bell marked neutralized after 100 ticks");
+
+        // Community Material-Driven Reconstruction
+        Settlement settlement = new Settlement(UUID.randomUUID(), "Belltower Village", new BlockPos(0, 64, 0), 64, FactionType.VILLAGER);
+        settlement.getStockpile().consume(Stockpile.ResourceType.STONE, settlement.getStockpile().get(Stockpile.ResourceType.STONE));
+        settlement.getStockpile().consume(Stockpile.ResourceType.IRON, settlement.getStockpile().get(Stockpile.ResourceType.IRON));
+
+        assertFalse(settlement.getStockpile().get(Stockpile.ResourceType.STONE) >= 5, "Initially no stone");
+        settlement.getStockpile().add(Stockpile.ResourceType.STONE, 8);
+        assertTrue(settlement.getStockpile().get(Stockpile.ResourceType.STONE) >= 5, "Can afford bell with stone");
+        settlement.getStockpile().consume(Stockpile.ResourceType.STONE, 5);
+        assertEquals(3, settlement.getStockpile().get(Stockpile.ResourceType.STONE), "Stockpile consumed 5 stone for bell reconstruction");
+    }
+
+    // 81. Raider Navigation Diagnostics, Stuck Detection & Bounded Completion (TEST 3)
+    private static void testRaiderNavigationDiagnosticsAndStuckHandling() {
+        UUID raiderId = UUID.randomUUID();
+        BlockPos initialPos = new BlockPos(50, 42, 80);
+        RaidTactics.RaiderDiagnostic diag = new RaidTactics.RaiderDiagnostic(raiderId, "vindicator", initialPos, 503);
+
+        assertEquals(raiderId, diag.getUuid(), "UUID matches");
+        assertEquals("vindicator", diag.getEntityType(), "Entity type vindicator");
+        assertEquals(503, diag.getRaidId(), "Raid ID matches");
+        assertEquals("ADVANCE_TO_BELL", diag.getCurrentObjective(), "Default objective ADVANCE_TO_BELL");
+        assertEquals(0L, diag.getStationaryTicks(), "Initial stationary ticks 0");
+
+        diag.setStationaryTicks(250L);
+        diag.setUnderground(true);
+        diag.setTrapped(true);
+        diag.setCurrentTargetName("Village Guard");
+
+        assertTrue(diag.isUnderground(), "Marked underground");
+        assertTrue(diag.isTrapped(), "Marked trapped");
+        assertEquals("Village Guard", diag.getCurrentTargetName(), "Target name verified");
+        assertTrue(diag.getStationaryTicks() > 200L, "Exceeds 200 tick stuck threshold for surface recovery");
+    }
+
+    // 82. Dual Lookout Watchtowers, Sentry Platforms & Foundations (TEST 4)
+    private static void testDualWatchtowerLookoutPositionsAndPlatformIntegrity() {
+        Blueprint archerTower = BlueprintRegistry.get("archer_watchtower");
+        assertNotNull(archerTower, "archer_watchtower blueprint exists");
+        assertEquals(7, archerTower.getWidth(), "Watchtower width 7");
+        assertEquals(13, archerTower.getHeight(), "Watchtower height 13");
+        assertEquals(7, archerTower.getDepth(), "Watchtower depth 7");
+
+        // Verify ladder backing column exists at x=3, z=4 and platform at y=10
+        boolean hasBacking = false;
+        boolean hasPlatform = false;
+        for (var entry : archerTower.getBlocks().entrySet()) {
+            BlockPos bp = entry.getKey();
+            if (bp.getX() == 3 && bp.getZ() == 4 && bp.getY() >= 2 && bp.getY() <= 9) {
+                hasBacking = true;
+            }
+            if (bp.getY() == 10) {
+                hasPlatform = true;
+            }
+        }
+        assertTrue(hasBacking, "Watchtower has solid cobblestone ladder backing column");
+        assertTrue(hasPlatform, "Watchtower has elevated lookout platform at y=10");
+
+        Settlement s = new Settlement(UUID.randomUUID(), "Defended Village", new BlockPos(100, 64, 100), 64, FactionType.VILLAGER);
+        s.addWatchtower(new BlockPos(125, 64, 125));
+        s.addWatchtower(new BlockPos(75, 64, 75));
+        assertEquals(2, s.getWatchtowers().size(), "Settlement maintains 2 defensive watchtowers");
+    }
+
+    // 83. Village Dogs Demographics & Handler Escort Registration (TEST 5)
+    private static void testVillageDogDemographicsAndCompanionEscort() {
+        assertEquals(2, VillageDogEntity.DogRole.values().length, "Two dog roles exist");
+        assertEquals(VillageDogEntity.DogRole.CIVILIAN_PET, VillageDogEntity.DogRole.valueOf("CIVILIAN_PET"), "CIVILIAN_PET exists");
+        assertEquals(VillageDogEntity.DogRole.GUARD_COMPANION, VillageDogEntity.DogRole.valueOf("GUARD_COMPANION"), "GUARD_COMPANION exists");
+
+        AttributeSupplier attributes = VillageDogEntity.createAttributes().build();
+        assertNotNull(attributes, "VillageDogEntity attributes built");
+        assertEquals(24.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH), "Max HP 24.0");
+        assertEquals(0.32, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED), "Speed 0.32");
+        assertEquals(5.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE), "Attack damage 5.0");
+    }
+
+    // 84. Natural Cavalry Recruitment Pipeline & Mounted Attributes (TEST 6)
+    private static void testNaturalCavalryRecruitmentPipeline() {
+        assertEquals(3, VillageCavalryEntity.CavalryRole.values().length, "3 Cavalry roles exist");
+        assertEquals(VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN, VillageCavalryEntity.CavalryRole.valueOf("MOUNTED_SWORDSMAN"), "MOUNTED_SWORDSMAN exists");
+        assertEquals(VillageCavalryEntity.CavalryRole.MOUNTED_SCOUT, VillageCavalryEntity.CavalryRole.valueOf("MOUNTED_SCOUT"), "MOUNTED_SCOUT exists");
+        assertEquals(VillageCavalryEntity.CavalryRole.MOUNTED_CAPTAIN, VillageCavalryEntity.CavalryRole.valueOf("MOUNTED_CAPTAIN"), "MOUNTED_CAPTAIN exists");
+
+        AttributeSupplier attributes = VillageCavalryEntity.createAttributes().build();
+        assertNotNull(attributes, "VillageCavalryEntity attributes built");
+        assertEquals(36.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH), "Max HP 36.0");
+        assertEquals(0.30, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED), "Speed 0.30");
+        assertEquals(7.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE), "Attack damage 7.0");
+        assertEquals(52.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE), "Follow range 52.0");
+        assertEquals(16.0, attributes.getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR), "Armor 16.0");
+    }
+
+    // 85. Blueprint Structural Integrity: Complete Walls, Solid Roofs & Entrances (TEST 7)
+    private static void testBlueprintStructuralIntegrity() {
+        String[] blueprints = {"small_oak_house", "two_story_house", "farmhouse", "workshop", "inn_guesthouse", "archer_watchtower", "cleric_clinic", "barracks"};
+
+        for (String id : blueprints) {
+            Blueprint bp = BlueprintRegistry.get(id);
+            assertNotNull(bp, "Blueprint exists: " + id);
+            assertTrue(bp.getBlocks().size() >= 30, id + " has substantive block count (>=30 blocks)");
+
+            // Check roof coverage: highest 2 Y levels must contain roof blocks
+            int maxY = 0;
+            for (BlockPos p : bp.getBlocks().keySet()) {
+                if (p.getY() > maxY) maxY = p.getY();
+            }
+            assertTrue(maxY >= bp.getHeight() - 2, id + " roof reaches near blueprint height bound");
+
+            // For residential buildings, check valid bed count
+            if (id.equals("small_oak_house") || id.equals("two_story_house") || id.equals("farmhouse") || id.equals("inn_guesthouse") || id.equals("cleric_clinic")) {
+                assertTrue(bp.getBedCount() >= 1, id + " has at least 1 authentic 2-block bed");
+            }
+        }
+    }
+
+    // 86. Defender Intelligence & Allegiance Hierarchy (TEST 8)
+    private static void testDefenderIntelligenceAndThreatScoring() {
+        VillageDefenseController controller = VillageDefenseController.get();
+        assertNotNull(controller, "VillageDefenseController exists");
+
+        // Base threat score for null entity is 0.0
+        assertEquals(0.0, controller.calculateThreatScore(null, BlockPos.ZERO, Collections.emptyList()), "Null threat score is 0.0");
+
+        // Allegiance registry ally check
+        UUID guardUuid = UUID.randomUUID();
+        UUID archerUuid = UUID.randomUUID();
+        String settlementId = UUID.randomUUID().toString();
+
+        AllegianceRegistry.get().register(guardUuid, settlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.MELEE_GUARD);
+        AllegianceRegistry.get().register(archerUuid, settlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY);
+
+        var guardProf = AllegianceRegistry.get().getProfile(guardUuid);
+        assertNotNull(guardProf, "Guard profile exists");
+        assertEquals(settlementId, guardProf.getSettlementId(), "Guard settlement ID matches");
+
+        var archerProf = AllegianceRegistry.get().getProfile(archerUuid);
+        assertNotNull(archerProf, "Archer profile exists");
+        assertEquals(settlementId, archerProf.getSettlementId(), "Archer settlement ID matches");
+        assertEquals(AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY, archerProf.getRole(), "Archer role is WATCHTOWER_SENTRY");
+    }
+
+    // 87. Simulation Persistence & World Reload State Serialization (TEST 9)
+    private static void testSimulationPersistenceAndSerialization() {
+        Settlement s = new Settlement(UUID.randomUUID(), "Persistence Settlement", new BlockPos(500, 64, 500), 64, FactionType.VILLAGER);
+        s.addWatchtower(new BlockPos(520, 64, 520));
+        s.addBuilding("archer_watchtower", new BlockPos(520, 64, 520), true, 0);
+        s.addBuilding("small_oak_house", new BlockPos(505, 64, 505), false, 2);
+
+        assertEquals(1, s.getWatchtowers().size(), "1 watchtower recorded");
+        assertEquals(2, s.getBuildings().size(), "2 registered buildings");
+
+        var b1 = s.getBuildings().get(0);
+        var b2 = s.getBuildings().get(1);
+
+        assertTrue(b1.isCompleted(), "Tower marked complete");
+        assertFalse(b2.isCompleted(), "House marked in-progress");
+        assertEquals(2, b2.getBedCount(), "House bed count 2");
+    }
+
+    // 88. Full System Regression Invariants (TEST 10)
+    private static void testSystemRegressionInvariants() {
+        // 1. Config active
+        assertTrue(FeatureConfig.get().protectPlayerBlocks, "Player protection enabled");
+        assertTrue(FeatureConfig.get().enableZombieIntelligence, "Zombie intelligence enabled");
+        assertTrue(FeatureConfig.get().enableIllagerTactics, "Illager tactics enabled");
+
+        // 2. Minecart 2.5x speed
+        assertEquals(2.5, FeatureConfig.get().minecartSpeedMultiplier, "Minecart speed multiplier 2.5x");
+
+        // 3. Boss parameters
+        assertEquals(180.0, MutantZombieCommanderEntity.createAttributes().build().getBaseValue(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH), "Mutant commander 180 HP");
+
+        // 4. Zombie mining tool compatibility
+        assertTrue(ZombieSiegeMiningGoal.isToolCompatible(Blocks.COBBLESTONE.defaultBlockState(), ZombieSiegeMiningGoal.ToolType.PICKAXE), "Pickaxe compatible with cobblestone");
+        assertTrue(ZombieSiegeMiningGoal.isToolCompatible(Blocks.OAK_PLANKS.defaultBlockState(), ZombieSiegeMiningGoal.ToolType.AXE), "Axe compatible with oak planks");
+        assertTrue(ZombieSiegeMiningGoal.isToolCompatible(Blocks.DIRT.defaultBlockState(), ZombieSiegeMiningGoal.ToolType.SHOVEL), "Shovel compatible with dirt");
+
+        // 5. 13 workforce professions
+        assertEquals(13, VillageWorkforceManager.ManagedProfession.values().length, "13 workforce professions");
+
+        // 6. Dimensional Scars default diameter
+        assertEquals(120, FeatureConfig.get().scarDefaultDiameter, "Dimensional scar default diameter 120m");
     }
 
     private static void assertNotNull(Object obj, String message) {

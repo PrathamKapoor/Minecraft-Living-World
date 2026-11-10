@@ -10,9 +10,11 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.*;
 import livingworld.config.FeatureConfig;
+import livingworld.core.ProtectionManager;
 import livingworld.faction.FactionType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.storage.LevelResource;
 
 public class SettlementManager {
@@ -129,6 +131,7 @@ public class SettlementManager {
             settlement.setHousingCapacity(settlement.getPopulation() + 1); // Triggers autonomous construction
             register(settlement);
             EmpireManager.get().checkAndPromoteToEmpire(level, settlement);
+            ensureWatchtowers(level, settlement);
             livingworld.LivingWorldMod.LOGGER.info("[Living World] Auto-discovered natural village: " + name + " at " + pos + " with population " + settlement.getPopulation());
 
             // Notify nearby players
@@ -200,6 +203,9 @@ public class SettlementManager {
             if (currentTicks % 100 == 0) {
                 livingworld.faction.VillageGuardManager.get().tickGuardRecruitment(level, settlement);
             }
+            if (currentTicks % 200 == 0) {
+                ensureWatchtowers(level, settlement);
+            }
             // Continuous Threat & Defense Controller tick
             livingworld.faction.VillageDefenseController.get().tickDefense(level, settlement);
         }
@@ -207,6 +213,61 @@ public class SettlementManager {
         // Periodic checkpoint to disk (every 15 seconds)
         if (currentTicks % 300 == 0 && !settlements.isEmpty()) {
             save(level);
+        }
+    }
+
+    public void ensureWatchtowers(ServerLevel level, Settlement settlement) {
+        if (settlement == null || level == null) return;
+        if (settlement.getWatchtowers().size() >= 2) return;
+
+        Blueprint bp = BlueprintRegistry.get("archer_watchtower");
+        if (bp == null) bp = BlueprintRegistry.get("watchtower");
+        if (bp == null) return;
+
+        int needed = 2 - settlement.getWatchtowers().size();
+        int[] angles = {45, 225, 135, 315};
+
+        for (int angle : angles) {
+            if (needed <= 0) break;
+            double rad = Math.toRadians(angle);
+            int dist = 22 + (angle % 7);
+            int ox = (int) (Math.cos(rad) * dist);
+            int oz = (int) (Math.sin(rad) * dist);
+            BlockPos cand = settlement.getCenter().offset(ox, 0, oz);
+
+            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
+            if (surfaceY >= 62) {
+                BlockPos origin = new BlockPos(cand.getX(), surfaceY, cand.getZ());
+                if (level.isLoaded(origin) && !ProtectionManager.get().isProtectedBlock(level, origin)) {
+                    livingworld.command.LivingWorldCommand.fillFoundationColumns(level, origin, bp.getWidth(), bp.getDepth());
+                    for (var entry : bp.getBlocks().entrySet()) {
+                        BlockPos target = origin.offset(entry.getKey().getX(), entry.getKey().getY(), entry.getKey().getZ());
+                        if (level.isLoaded(target) && !ProtectionManager.get().isProtectedBlock(level, target)) {
+                            level.setBlock(target, entry.getValue(), 3);
+                        }
+                    }
+                    settlement.addWatchtower(origin);
+                    settlement.addBuilding("archer_watchtower", origin, true, 0);
+                    needed--;
+
+                    // Post an elevated sentry archer on the lookout platform (y=10)
+                    BlockPos platformPos = origin.offset(3, 10, 3);
+                    if (level.isLoaded(platformPos)) {
+                        livingworld.entity.VillageArcherEntity sentry = livingworld.entity.LivingWorldEntities.VILLAGE_ARCHER.create(level, net.minecraft.world.entity.EntitySpawnReason.EVENT);
+                        if (sentry != null) {
+                            sentry.setPos(platformPos.getX() + 0.5, platformPos.getY() + 1.0, platformPos.getZ() + 0.5);
+                            sentry.setHomeSettlementId(settlement.getId().toString());
+                            sentry.setWatchtowerSentry(true);
+                            sentry.setCustomName(net.minecraft.network.chat.Component.literal("§9[Tower Sentry] Alden"));
+                            sentry.setCustomNameVisible(true);
+                            livingworld.faction.AllegianceRegistry.get().register(sentry.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", livingworld.faction.AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY);
+                            level.addFreshEntity(sentry);
+                        }
+                    }
+
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Established defensive lookout watchtower for " + settlement.getName() + " at " + origin);
+                }
+            }
         }
     }
 
@@ -231,6 +292,10 @@ public class SettlementManager {
                 d.housingCapacity = s.getHousingCapacity();
                 d.guardCount = s.getGuardCount();
                 d.stockpile = s.getStockpile().toMap();
+                d.watchtowers = new ArrayList<>();
+                for (BlockPos wp : s.getWatchtowers()) {
+                    d.watchtowers.add(wp.getX() + "," + wp.getY() + "," + wp.getZ());
+                }
 
                 // Save active project if any
                 if (s.getActiveProject() != null) {
@@ -273,6 +338,17 @@ public class SettlementManager {
                         s.setGuardCount(d.guardCount);
                         s.getStockpile().fromMap(d.stockpile);
 
+                        if (d.watchtowers != null) {
+                            for (String wStr : d.watchtowers) {
+                                String[] parts = wStr.split(",");
+                                if (parts.length == 3) {
+                                    try {
+                                        s.addWatchtower(new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])));
+                                    } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+
                         if (d.activeBlueprintId != null) {
                             BlockPos origin = new BlockPos(d.activeOriginX, d.activeOriginY, d.activeOriginZ);
                             s.queueProject(new ConstructionProject(d.activeBlueprintId, origin));
@@ -302,6 +378,7 @@ public class SettlementManager {
         int housingCapacity;
         int guardCount;
         Map<String, Integer> stockpile;
+        List<String> watchtowers;
         String activeBlueprintId;
         int activeOriginX, activeOriginY, activeOriginZ;
     }

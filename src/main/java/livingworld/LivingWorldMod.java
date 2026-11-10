@@ -67,7 +67,7 @@ public class LivingWorldMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.6 for Minecraft 26.3 (Java 25)");
+        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.7 for Minecraft 26.3 (Java 25)");
 
         // 1. Initialize Configuration
         File configFile = FabricLoader.getInstance().getConfigDir().resolve("livingworld.json").toFile();
@@ -270,6 +270,7 @@ public class LivingWorldMod implements ModInitializer {
             SettlementManager.get().clear();
             ProtectionManager.get().clear();
             livingworld.worldgen.DimensionalScarManager.get().clear();
+            RaidTactics.get().clear();
         });
 
         // 10. Server Tick Scheduler: Two-Scale Simulation (Strategic & Tactical across Dimensions)

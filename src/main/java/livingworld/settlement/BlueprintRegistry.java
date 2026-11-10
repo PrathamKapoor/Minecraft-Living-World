@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import livingworld.economy.Stockpile;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -144,6 +145,7 @@ public class BlueprintRegistry {
 
         // Authentic Two-Block Bed (Foot at z=5, Head at z=6 facing South)
         bp.addBed(2, 1, 5, Direction.SOUTH, Blocks.BED.red());
+        bp.addDoor(4, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
         bp.addBlock(3, 1, 6, Blocks.CHEST);
         bp.addBlock(6, 1, 6, Blocks.CRAFTING_TABLE);
         bp.addBlock(6, 1, 5, Blocks.FURNACE);
@@ -167,7 +169,7 @@ public class BlueprintRegistry {
             }
         }
 
-        // Ground floor stone masonry
+        // Ground floor stone masonry (y=1 to y=3)
         for (int y = 1; y <= 3; y++) {
             for (int x = 1; x <= 9; x++) {
                 for (int z = 1; z <= 6; z++) {
@@ -183,7 +185,13 @@ public class BlueprintRegistry {
             }
         }
 
-        // Upper floor wooden framing
+        // Functional front door and internal wooden staircase
+        bp.addDoor(5, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+        bp.addBlock(8, 1, 3, Blocks.OAK_STAIRS);
+        bp.addBlock(8, 2, 4, Blocks.OAK_STAIRS);
+        bp.addBlock(8, 3, 5, Blocks.OAK_STAIRS);
+
+        // Upper floor wooden framing (y=4 to y=6)
         for (int y = 4; y <= 6; y++) {
             for (int x = 0; x <= 10; x++) {
                 for (int z = 0; z <= 7; z++) {
@@ -194,31 +202,38 @@ public class BlueprintRegistry {
                         if ((x == 3 || x == 7) && z == 0 && y == 5) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
                         else bp.addBlock(x, y, z, Blocks.OAK_PLANKS);
                     } else if (y == 4) {
-                        bp.addBlock(x, y, z, Blocks.OAK_PLANKS); // Floor
+                        // Floor with stairwell opening at x=8, z=3..5
+                        if (!(x == 8 && z >= 3 && z <= 5)) {
+                            bp.addBlock(x, y, z, Blocks.OAK_PLANKS);
+                        }
                     }
                 }
             }
         }
 
-        // Roof
+        // Complete pitched roof with zero open gaps (y=7 to y=8)
         for (int x = 0; x <= 10; x++) {
-            bp.addBlock(x, 7, 0, Blocks.OAK_STAIRS);
-            bp.addBlock(x, 7, 7, Blocks.OAK_STAIRS);
-            bp.addBlock(x, 7, 3, Blocks.OAK_SLAB);
-            bp.addBlock(x, 7, 4, Blocks.OAK_SLAB);
+            for (int z = 0; z <= 7; z++) {
+                if (z == 0 || z == 7) bp.addBlock(x, 7, z, Blocks.OAK_STAIRS);
+                else if (z == 1 || z == 6) bp.addBlock(x, 7, z, Blocks.OAK_PLANKS);
+                else if (z == 2 || z == 5) bp.addBlock(x, 8, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 8, z, Blocks.OAK_SLAB);
+            }
         }
 
         // Valid Two-Block Beds upstairs
         bp.addBed(2, 5, 2, Direction.SOUTH, Blocks.BED.blue());
-        bp.addBed(8, 5, 2, Direction.SOUTH, Blocks.BED.red());
+        bp.addBed(7, 5, 2, Direction.SOUTH, Blocks.BED.red());
         bp.addBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
         bp.addBlock(6, 1, 4, Blocks.FURNACE);
+        bp.addBlock(5, 3, 3, Blocks.LANTERN);
+        bp.addBlock(5, 7, 3, Blocks.LANTERN);
 
         return bp;
     }
 
     /**
-     * 16-Block Military Watchtower.
+     * 16-Block Military Watchtower with firmly attached climbing ladder and parapets.
      */
     private static Blueprint createFortifiedWatchtower() {
         Blueprint bp = new Blueprint("watchtower", "Fortified Military Watchtower", 9, 16, 9);
@@ -238,14 +253,17 @@ public class BlueprintRegistry {
                 for (int z = 1; z <= 7; z++) {
                     boolean isWall = (x == 1 || x == 7 || z == 1 || z == 7);
                     if (isWall) {
-                        if (x == 4 && z == 1 && (y == 3 || y == 4)) continue;
+                        if (x == 4 && z == 1 && (y == 3 || y == 4)) continue; // Door opening
                         if ((y == 6 || y == 9) && (x == 4 || z == 4)) bp.addBlock(x, y, z, Blocks.IRON_BARS);
                         else bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
                     }
-                    if (x == 4 && z == 4) bp.addBlock(x, y, z, Blocks.LADDER); // Central ladder access
                 }
             }
+            // Firmly attached climbing ladder along north wall (facing South)
+            bp.addLadder(4, y, 2, Direction.SOUTH);
         }
+
+        bp.addDoor(4, 3, 1, Direction.SOUTH, Blocks.OAK_DOOR);
 
         // Parapet Battlements (y=13 to y=15)
         for (int x = 0; x <= 8; x++) {
@@ -254,11 +272,16 @@ public class BlueprintRegistry {
                 if (isEdge) {
                     if ((x + z) % 2 == 0) bp.addBlock(x, 14, z, Blocks.STONE_BRICK_WALL);
                 } else {
-                    bp.addBlock(x, 13, z, Blocks.STONE_BRICKS); // Floor
+                    // Roof platform with hatchway opening at (4, 13, 2)
+                    if (!(x == 4 && z == 2)) {
+                        bp.addBlock(x, 13, z, Blocks.STONE_BRICKS);
+                    }
                 }
             }
         }
         bp.addBlock(4, 14, 4, Blocks.CAMPFIRE); // Signal brazier
+        bp.addBlock(1, 14, 1, Blocks.LANTERN);
+        bp.addBlock(7, 14, 7, Blocks.LANTERN);
 
         return bp;
     }
@@ -320,6 +343,18 @@ public class BlueprintRegistry {
                 }
             }
         }
+
+        bp.addDoor(7, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Solid Stone Brick Roof (y=5 to y=6)
+        for (int x = 0; x < 15; x++) {
+            for (int z = 0; z < 11; z++) {
+                if (z == 0 || z == 10) bp.addBlock(x, 5, z, Blocks.STONE_BRICK_STAIRS);
+                else if (z == 1 || z == 9) bp.addBlock(x, 6, z, Blocks.STONE_BRICK_STAIRS);
+                else bp.addBlock(x, 6, z, Blocks.STONE_BRICK_SLAB);
+            }
+        }
+        bp.addBlock(7, 4, 5, Blocks.LANTERN);
 
         // Bunk Quarter: 4 Valid Two-Block Beds
         bp.addBed(2, 1, 2, Direction.SOUTH, Blocks.BED.red());
@@ -511,7 +546,7 @@ public class BlueprintRegistry {
     }
 
     /**
-     * Forge Workshop (11x7x9).
+     * Forge Workshop (11x7x9) with stone walls, chimney, anvil, and forge stations.
      */
     private static Blueprint createWorkshop() {
         Blueprint bp = new Blueprint("workshop", "Forge Workshop", 11, 7, 9);
@@ -523,16 +558,51 @@ public class BlueprintRegistry {
                 bp.addBlock(x, 0, z, Blocks.STONE_BRICKS);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 9; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isCorner = (x == 1 || x == 9) && (z == 1 || z == 7);
+                    boolean isWall = (x == 1 || x == 9 || z == 1 || z == 7);
+                    if (isCorner) {
+                        bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    } else if (isWall) {
+                        if (x == 5 && z == 1 && (y == 1 || y == 2)) continue; // Entrance opening
+                        if ((x == 3 || x == 7) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.IRON_BARS);
+                        else bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(5, 1, 1, Direction.SOUTH, Blocks.IRON_DOOR);
+
+        // Stone Brick Roof (y=5 to y=6)
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 8; z++) {
+                if (z == 0 || z == 8) bp.addBlock(x, 5, z, Blocks.STONE_BRICK_STAIRS);
+                else bp.addBlock(x, 6, z, Blocks.STONE_BRICK_SLAB);
+            }
+        }
+
+        // Forge Chimney
+        for (int y = 1; y <= 6; y++) {
+            bp.addBlock(8, y, 6, Blocks.STONE_BRICKS);
+        }
+        bp.addBlock(8, 7, 6, Blocks.CAMPFIRE);
+
         bp.addBlock(3, 1, 4, Blocks.BLAST_FURNACE);
         bp.addBlock(4, 1, 4, Blocks.ANVIL);
         bp.addBlock(5, 1, 4, Blocks.GRINDSTONE);
         bp.addBlock(6, 1, 4, Blocks.SMITHING_TABLE);
+        bp.addBlock(5, 4, 4, Blocks.LANTERN);
 
         return bp;
     }
 
     /**
-     * Gambrel Barn (13x8x11).
+     * Gambrel Barn (13x8x11) with timber frame, hayloft, stalls, and gambrel roof.
      */
     private static Blueprint createBarn() {
         Blueprint bp = new Blueprint("barn", "Gambrel Barn", 13, 8, 11);
@@ -544,15 +614,58 @@ public class BlueprintRegistry {
                 bp.addBlock(x, 0, z, Blocks.COBBLESTONE);
             }
         }
+
+        // Barn Walls (y=1 to y=5)
+        for (int y = 1; y <= 5; y++) {
+            for (int x = 1; x <= 11; x++) {
+                for (int z = 1; z <= 9; z++) {
+                    boolean isCorner = (x == 1 || x == 11) && (z == 1 || z == 9);
+                    boolean isWall = (x == 1 || x == 11 || z == 1 || z == 9);
+                    if (isCorner) {
+                        bp.addBlock(x, y, z, Blocks.OAK_LOG);
+                    } else if (isWall) {
+                        if (x >= 5 && x <= 7 && z == 1 && y <= 3) continue; // Barn double gate entrance
+                        if ((x == 3 || x == 9) && (z == 1 || z == 9) && y == 3) bp.addBlock(x, y, z, Blocks.OAK_FENCE);
+                        else bp.addBlock(x, y, z, Blocks.OAK_PLANKS);
+                    }
+                }
+            }
+        }
+
+        bp.addBlock(6, 1, 1, Blocks.OAK_FENCE_GATE);
+        bp.addBlock(6, 2, 1, Blocks.OAK_FENCE_GATE);
+
+        // Hay Loft Floor (y=4) with ladder attached to post at (2, y, 6)
+        for (int x = 2; x <= 10; x++) {
+            for (int z = 5; z <= 8; z++) {
+                bp.addBlock(x, 4, z, Blocks.OAK_SLAB);
+            }
+        }
+        for (int y = 1; y <= 3; y++) {
+            bp.addBlock(2, y, 6, Blocks.OAK_LOG);
+            bp.addLadder(2, y, 5, Direction.NORTH);
+        }
+
+        // Complete Gambrel Roof (y=5 to y=7)
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 10; z++) {
+                if (z == 0 || z == 10) bp.addBlock(x, 5, z, Blocks.OAK_STAIRS);
+                else if (z == 1 || z == 9) bp.addBlock(x, 6, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 7, z, Blocks.OAK_SLAB);
+            }
+        }
+
         bp.addBlock(3, 1, 3, Blocks.HAY_BLOCK);
         bp.addBlock(4, 1, 3, Blocks.HAY_BLOCK);
         bp.addBlock(9, 1, 3, Blocks.WATER_CAULDRON);
+        bp.addBlock(6, 4, 5, Blocks.LANTERN);
+        bp.addBlock(6, 7, 5, Blocks.LANTERN);
 
         return bp;
     }
 
     /**
-     * Warehouse (13x7x11).
+     * Warehouse (13x7x11) with stone foundation, oak siding, double door, and full roof.
      */
     private static Blueprint createWarehouse() {
         Blueprint bp = new Blueprint("warehouse", "Supply Warehouse", 13, 7, 11);
@@ -564,18 +677,49 @@ public class BlueprintRegistry {
                 bp.addBlock(x, 0, z, Blocks.STONE_BRICKS);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 11; x++) {
+                for (int z = 1; z <= 9; z++) {
+                    boolean isCorner = (x == 1 || x == 11) && (z == 1 || z == 9);
+                    boolean isWall = (x == 1 || x == 11 || z == 1 || z == 9);
+                    if (isCorner) {
+                        bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    } else if (isWall) {
+                        if (x == 6 && z == 1 && (y == 1 || y == 2)) continue;
+                        if ((x == 3 || x == 9) && (z == 1 || z == 9) && y == 2) bp.addBlock(x, y, z, Blocks.IRON_BARS);
+                        else bp.addBlock(x, y, z, y == 1 ? Blocks.STONE_BRICKS : Blocks.OAK_PLANKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(6, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Full Roof (y=5 to y=6)
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 10; z++) {
+                if (z == 0 || z == 10) bp.addBlock(x, 5, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 6, z, Blocks.OAK_SLAB);
+            }
+        }
+
         bp.addBlock(3, 1, 3, Blocks.BARREL);
         bp.addBlock(4, 1, 3, Blocks.CHEST);
         bp.addBlock(5, 1, 3, Blocks.BARREL);
+        bp.addBlock(8, 1, 3, Blocks.BARREL);
+        bp.addBlock(9, 1, 3, Blocks.CHEST);
+        bp.addBlock(6, 4, 5, Blocks.LANTERN);
 
         return bp;
     }
 
     /**
-     * Market Square (13x5x13).
+     * Market Square (13x6x13) with canopy merchant stalls and primary central bell monument.
      */
     private static Blueprint createMarket() {
-        Blueprint bp = new Blueprint("market", "Market Square", 13, 5, 13);
+        Blueprint bp = new Blueprint("market", "Market Square", 13, 6, 13);
         bp.setCost(Stockpile.ResourceType.WOOD, 25);
         bp.setCost(Stockpile.ResourceType.STONE, 25);
 
@@ -584,12 +728,38 @@ public class BlueprintRegistry {
                 bp.addBlock(x, 0, z, (x == 6 || z == 6) ? Blocks.GRAVEL : Blocks.COBBLESTONE);
             }
         }
-        bp.addBlock(6, 1, 6, Blocks.BELL); // Central market bell
+
+        // Market Stalls with colorful wool canopies
+        int[][] stallOrigins = { {2, 2}, {8, 2}, {2, 8}, {8, 8} };
+        Block[] canopies = { Blocks.WOOL.red(), Blocks.WOOL.yellow(), Blocks.WOOL.blue(), Blocks.WOOL.white() };
+        for (int s = 0; s < 4; s++) {
+            int sx = stallOrigins[s][0];
+            int sz = stallOrigins[s][1];
+            bp.addBlock(sx, 1, sz, Blocks.OAK_FENCE);
+            bp.addBlock(sx + 2, 1, sz, Blocks.OAK_FENCE);
+            bp.addBlock(sx, 1, sz + 2, Blocks.OAK_FENCE);
+            bp.addBlock(sx + 2, 1, sz + 2, Blocks.OAK_FENCE);
+            bp.addBlock(sx + 1, 1, sz + 1, Blocks.BARREL);
+
+            for (int dx = 0; dx <= 2; dx++) {
+                for (int dz = 0; dz <= 2; dz++) {
+                    bp.addBlock(sx + dx, 2, sz + dz, canopies[s]);
+                }
+            }
+        }
+
+        // Central Stone Monument with Primary Village Market Bell
+        bp.addBlock(6, 1, 6, Blocks.COBBLESTONE);
+        bp.addBlock(6, 2, 6, Blocks.STONE_BRICKS);
+        bp.addBlock(6, 3, 6, Blocks.BELL); // Strategic Raid Target Bell
+        bp.addBlock(6, 4, 6, Blocks.STONE_BRICK_SLAB);
+        bp.addBlock(6, 5, 6, Blocks.LANTERN);
+
         return bp;
     }
 
     /**
-     * Farmhouse (11x7x9) with 2 two-block beds.
+     * Complete Rural Farmhouse (11x7x9) with walls, windows, door, pitched roof, and 2 two-block beds.
      */
     private static Blueprint createFarmhouse() {
         Blueprint bp = new Blueprint("farmhouse", "Rural Farmhouse", 11, 7, 9);
@@ -601,10 +771,43 @@ public class BlueprintRegistry {
                 bp.addBlock(x, 0, z, Blocks.COBBLESTONE);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 9; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isCorner = (x == 1 || x == 9) && (z == 1 || z == 7);
+                    boolean isWall = (x == 1 || x == 9 || z == 1 || z == 7);
+                    if (isCorner) {
+                        bp.addBlock(x, y, z, Blocks.OAK_LOG);
+                    } else if (isWall) {
+                        if (x == 5 && z == 1 && (y == 1 || y == 2)) continue; // Door opening
+                        if ((x == 3 || x == 7) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else if ((z == 4) && (x == 1 || x == 9) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, y == 1 ? Blocks.STONE_BRICKS : Blocks.OAK_PLANKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(5, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Complete Pitched Roof (y=5 to y=7)
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 8; z++) {
+                if (z == 0 || z == 8) bp.addBlock(x, 5, z, Blocks.OAK_STAIRS);
+                else if (z == 1 || z == 7) bp.addBlock(x, 6, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 7, z, Blocks.OAK_SLAB);
+            }
+        }
+
+        // Valid Two-Block Beds (yellow and white)
         bp.addBed(2, 1, 3, Direction.SOUTH, Blocks.BED.yellow());
         bp.addBed(8, 1, 3, Direction.SOUTH, Blocks.BED.white());
-        bp.addBlock(5, 1, 4, Blocks.SMOKER);
-        bp.addBlock(5, 1, 5, Blocks.COMPOSTER);
+        bp.addBlock(5, 1, 5, Blocks.SMOKER);
+        bp.addBlock(5, 1, 6, Blocks.COMPOSTER);
+        bp.addBlock(4, 1, 5, Blocks.CRAFTING_TABLE);
+        bp.addBlock(5, 4, 4, Blocks.LANTERN);
 
         return bp;
     }
@@ -657,11 +860,11 @@ public class BlueprintRegistry {
     }
 
     // =========================================================================
-    // NEW v0.2.5 LIVING VILLAGE BLUEPRINTS (14 through 24)
+    // NEW v0.2.5 & v0.2.7 LIVING VILLAGE BLUEPRINTS (14 through 24)
     // =========================================================================
 
     /**
-     * 14. Village Bakery (9x7x8) with brick smoker oven and baker's bedroom.
+     * 14. Village Bakery (9x7x8) with brick smoker oven, chimney, and baker's bedroom.
      */
     private static Blueprint createBakery() {
         Blueprint bp = new Blueprint("bakery", "Village Bakery", 9, 7, 8);
@@ -685,20 +888,38 @@ public class BlueprintRegistry {
                 }
             }
         }
-        bp.addBlock(2, 1, 4, Blocks.SMOKER);
-        bp.addBlock(3, 1, 4, Blocks.BARREL);
-        bp.addBlock(4, 1, 4, Blocks.CRAFTING_TABLE);
+
+        bp.addDoor(4, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Pitched roof (y=5 to y=6)
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 7; z++) {
+                if (z == 0 || z == 7) bp.addBlock(x, 5, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 6, z, Blocks.OAK_SLAB);
+            }
+        }
+
+        // Brick chimney
+        for (int y = 1; y <= 5; y++) {
+            bp.addBlock(2, y, 4, Blocks.BRICKS);
+        }
+        bp.addBlock(2, 6, 4, Blocks.CAMPFIRE);
+
+        bp.addBlock(3, 1, 4, Blocks.SMOKER);
+        bp.addBlock(4, 1, 4, Blocks.BARREL);
+        bp.addBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
         bp.addBed(6, 1, 4, Direction.NORTH, Blocks.BED.orange());
+        bp.addBlock(4, 4, 3, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 15. The Traveler's Rest Inn & Guesthouse (13x8x11) with 4 two-block beds.
+     * 15. The Traveler's Rest Inn & Guesthouse (13x9x11) with ground tavern and 4 guest beds upstairs.
      */
     private static Blueprint createInnGuesthouse() {
-        Blueprint bp = new Blueprint("inn_guesthouse", "The Traveler's Rest Inn", 13, 8, 11);
-        bp.setCost(Stockpile.ResourceType.WOOD, 55);
-        bp.setCost(Stockpile.ResourceType.STONE, 45);
+        Blueprint bp = new Blueprint("inn_guesthouse", "The Traveler's Rest Inn", 13, 9, 11);
+        bp.setCost(Stockpile.ResourceType.WOOD, 65);
+        bp.setCost(Stockpile.ResourceType.STONE, 50);
 
         for (int x = 0; x < 13; x++) {
             for (int z = 0; z < 11; z++) {
@@ -706,48 +927,139 @@ public class BlueprintRegistry {
             }
         }
 
-        // 4 Valid Two-Block Guest Beds
-        bp.addBed(2, 5, 2, Direction.SOUTH, Blocks.BED.white());
-        bp.addBed(2, 5, 6, Direction.SOUTH, Blocks.BED.white());
-        bp.addBed(10, 5, 2, Direction.SOUTH, Blocks.BED.white());
-        bp.addBed(10, 5, 6, Direction.SOUTH, Blocks.BED.white());
+        // Ground floor walls (y=1 to y=3)
+        for (int y = 1; y <= 3; y++) {
+            for (int x = 1; x <= 11; x++) {
+                for (int z = 1; z <= 9; z++) {
+                    boolean isCorner = (x == 1 || x == 11) && (z == 1 || z == 9);
+                    boolean isWall = (x == 1 || x == 11 || z == 1 || z == 9);
+                    if (isCorner) bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    else if (isWall) {
+                        if (x == 6 && z == 1 && (y == 1 || y == 2)) continue; // Front door
+                        if ((x == 3 || x == 9) && (z == 1 || z == 9) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, Blocks.COBBLESTONE);
+                    }
+                }
+            }
+        }
 
-        // Ground Floor Tavern
+        bp.addDoor(6, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Staircase to upper floor
+        bp.addBlock(2, 1, 3, Blocks.OAK_STAIRS);
+        bp.addBlock(2, 2, 4, Blocks.OAK_STAIRS);
+        bp.addBlock(2, 3, 5, Blocks.OAK_STAIRS);
+
+        // Second floor (y=4)
+        for (int x = 1; x <= 11; x++) {
+            for (int z = 1; z <= 9; z++) {
+                if (!(x == 2 && z >= 3 && z <= 5)) {
+                    bp.addBlock(x, 4, z, Blocks.OAK_PLANKS);
+                }
+            }
+        }
+
+        // Second floor walls (y=5 to y=7)
+        for (int y = 5; y <= 7; y++) {
+            for (int x = 0; x <= 12; x++) {
+                for (int z = 0; z <= 10; z++) {
+                    boolean isCorner = (x == 0 || x == 12) && (z == 0 || z == 10);
+                    boolean isWall = (x == 0 || x == 12 || z == 0 || z == 10);
+                    if (isCorner) bp.addBlock(x, y, z, Blocks.OAK_LOG);
+                    else if (isWall) {
+                        if ((x == 4 || x == 8) && (z == 0 || z == 10) && y == 6) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, Blocks.SPRUCE_PLANKS);
+                    }
+                }
+            }
+        }
+
+        // Pitched roof (y=8 to y=9)
+        for (int x = 0; x <= 12; x++) {
+            for (int z = 0; z <= 10; z++) {
+                if (z == 0 || z == 10) bp.addBlock(x, 8, z, Blocks.SPRUCE_STAIRS);
+                else bp.addBlock(x, 9, z, Blocks.SPRUCE_SLAB);
+            }
+        }
+
+        // Ground Floor Tavern furniture
         bp.addBlock(6, 1, 5, Blocks.BREWING_STAND);
         bp.addBlock(6, 1, 6, Blocks.BARREL);
         bp.addBlock(7, 1, 6, Blocks.CHEST);
+        bp.addBlock(9, 1, 4, Blocks.OAK_SLAB);
+        bp.addBlock(6, 3, 5, Blocks.LANTERN);
+
+        // 4 Guest Beds upstairs
+        bp.addBed(3, 5, 2, Direction.SOUTH, Blocks.BED.white());
+        bp.addBed(3, 5, 7, Direction.SOUTH, Blocks.BED.white());
+        bp.addBed(9, 5, 2, Direction.SOUTH, Blocks.BED.white());
+        bp.addBed(9, 5, 7, Direction.SOUTH, Blocks.BED.white());
+        bp.addBlock(6, 7, 5, Blocks.LANTERN);
+
         return bp;
     }
 
     /**
-     * 16. Functional Village Armory (11x7x9).
+     * 16. Functional Village Armory (11x8x9) with deepslate walls, iron door, forge stations.
      */
     private static Blueprint createArmory() {
-        Blueprint bp = new Blueprint("armory", "Village Armory", 11, 7, 9);
-        bp.setCost(Stockpile.ResourceType.STONE, 55);
-        bp.setCost(Stockpile.ResourceType.WOOD, 25);
+        Blueprint bp = new Blueprint("armory", "Village Armory", 11, 8, 9);
+        bp.setCost(Stockpile.ResourceType.STONE, 60);
+        bp.setCost(Stockpile.ResourceType.WOOD, 30);
 
         for (int x = 0; x < 11; x++) {
             for (int z = 0; z < 9; z++) {
                 bp.addBlock(x, 0, z, Blocks.POLISHED_DEEPSLATE);
             }
         }
+
+        // Fortified walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 9; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isCorner = (x == 1 || x == 9) && (z == 1 || z == 7);
+                    boolean isWall = (x == 1 || x == 9 || z == 1 || z == 7);
+                    if (isCorner) bp.addBlock(x, y, z, Blocks.DEEPSLATE_BRICKS);
+                    else if (isWall) {
+                        if (x == 5 && z == 1 && (y == 1 || y == 2)) continue;
+                        if ((x == 3 || x == 7) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.IRON_BARS);
+                        else bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(5, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Roof (y=5 to y=6) with perimeter battlements
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 8; z++) {
+                boolean isEdge = (x == 0 || x == 10 || z == 0 || z == 8);
+                bp.addBlock(x, 5, z, Blocks.STONE_BRICKS);
+                if (isEdge && (x + z) % 2 == 0) {
+                    bp.addBlock(x, 6, z, Blocks.STONE_BRICK_WALL);
+                }
+            }
+        }
+
         bp.addBlock(2, 1, 3, Blocks.CHEST);
         bp.addBlock(2, 1, 4, Blocks.CHEST);
         bp.addBlock(8, 1, 3, Blocks.ANVIL);
         bp.addBlock(8, 1, 4, Blocks.SMITHING_TABLE);
         bp.addBlock(5, 1, 6, Blocks.BLAST_FURNACE);
+        bp.addBlock(5, 4, 4, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 17. Archer Watchtower & Sentry Post (7x12x7).
+     * 17. Archer Watchtower & Sentry Post (7x13x7) with solid ladder column and sentry roof.
      */
     private static Blueprint createArcherWatchtower() {
-        Blueprint bp = new Blueprint("archer_watchtower", "Archer Sentry Post", 7, 12, 7);
-        bp.setCost(Stockpile.ResourceType.STONE, 40);
-        bp.setCost(Stockpile.ResourceType.WOOD, 30);
+        Blueprint bp = new Blueprint("archer_watchtower", "Archer Sentry Post", 7, 13, 7);
+        bp.setCost(Stockpile.ResourceType.STONE, 45);
+        bp.setCost(Stockpile.ResourceType.WOOD, 35);
 
+        // Solid Stone Base (y=0 to y=1)
         for (int y = 0; y <= 1; y++) {
             for (int x = 0; x < 7; x++) {
                 for (int z = 0; z < 7; z++) {
@@ -755,163 +1067,410 @@ public class BlueprintRegistry {
                 }
             }
         }
+
+        // Support posts and central ladder column (y=2 to y=9)
         for (int y = 2; y <= 9; y++) {
             bp.addBlock(1, y, 1, Blocks.OAK_LOG);
             bp.addBlock(1, y, 5, Blocks.OAK_LOG);
             bp.addBlock(5, y, 1, Blocks.OAK_LOG);
             bp.addBlock(5, y, 5, Blocks.OAK_LOG);
-            bp.addBlock(3, y, 3, Blocks.LADDER); // Sentry ladder
+
+            // Solid backing column for ladder
+            bp.addBlock(3, y, 4, Blocks.COBBLESTONE);
+            // Ladder firmly attached to solid cobblestone
+            bp.addLadder(3, y, 3, Direction.NORTH);
         }
+
+        // Entrance door at base
+        bp.addDoor(3, 1, 0, Direction.SOUTH, Blocks.OAK_DOOR);
+
         // Lookout platform (y=10)
+        for (int x = 0; x < 7; x++) {
+            for (int z = 0; z < 7; z++) {
+                if (!(x == 3 && z == 3)) { // Hatchway opening for ladder
+                    bp.addBlock(x, 10, z, Blocks.OAK_PLANKS);
+                }
+            }
+        }
+
+        // Parapet fences (y=11)
         for (int x = 0; x < 7; x++) {
             for (int z = 0; z < 7; z++) {
                 boolean isEdge = (x == 0 || x == 6 || z == 0 || z == 6);
                 if (isEdge) bp.addBlock(x, 11, z, Blocks.OAK_FENCE);
-                else bp.addBlock(x, 10, z, Blocks.OAK_PLANKS);
             }
         }
+
+        // Sentry Roof (y=12) supported by corner posts
+        bp.addBlock(1, 11, 1, Blocks.OAK_FENCE);
+        bp.addBlock(1, 11, 5, Blocks.OAK_FENCE);
+        bp.addBlock(5, 11, 1, Blocks.OAK_FENCE);
+        bp.addBlock(5, 11, 5, Blocks.OAK_FENCE);
+        for (int x = 1; x <= 5; x++) {
+            for (int z = 1; z <= 5; z++) {
+                bp.addBlock(x, 12, z, Blocks.OAK_SLAB);
+            }
+        }
+        bp.addBlock(3, 11, 3, Blocks.LANTERN);
+
         return bp;
     }
 
     /**
-     * 18. Village Stables (11x6x9).
+     * 18. Village Stables (11x6x9) with solid roof, timber frame, and stalls.
      */
     private static Blueprint createStable() {
         Blueprint bp = new Blueprint("stable", "Village Stables", 11, 6, 9);
-        bp.setCost(Stockpile.ResourceType.WOOD, 40);
-        bp.setCost(Stockpile.ResourceType.STONE, 15);
+        bp.setCost(Stockpile.ResourceType.WOOD, 45);
+        bp.setCost(Stockpile.ResourceType.STONE, 20);
 
         for (int x = 0; x < 11; x++) {
             for (int z = 0; z < 9; z++) {
-                bp.addBlock(x, 0, z, Blocks.COBBLESTONE);
+                bp.addBlock(x, 0, z, (x % 3 == 0) ? Blocks.COBBLESTONE : Blocks.COARSE_DIRT);
             }
         }
-        bp.addBlock(2, 1, 3, Blocks.HAY_BLOCK);
-        bp.addBlock(5, 1, 3, Blocks.WATER_CAULDRON);
-        bp.addBlock(8, 1, 3, Blocks.HAY_BLOCK);
+
+        // Timber frame posts (y=1 to y=3)
+        for (int y = 1; y <= 3; y++) {
+            for (int x = 1; x <= 9; x += 4) {
+                bp.addBlock(x, y, 1, Blocks.OAK_LOG);
+                bp.addBlock(x, y, 7, Blocks.OAK_LOG);
+            }
+            // Back wall
+            for (int x = 1; x <= 9; x++) {
+                bp.addBlock(x, y, 7, Blocks.OAK_PLANKS);
+            }
+            // Side walls
+            for (int z = 1; z <= 7; z++) {
+                bp.addBlock(1, y, z, Blocks.OAK_PLANKS);
+                bp.addBlock(9, y, z, Blocks.OAK_PLANKS);
+            }
+        }
+
+        // Front fences and gates
+        bp.addBlock(3, 1, 1, Blocks.OAK_FENCE_GATE);
+        bp.addBlock(7, 1, 1, Blocks.OAK_FENCE_GATE);
+
+        // Solid Roof (y=4 to y=5)
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 8; z++) {
+                if (z == 0 || z == 8) bp.addBlock(x, 4, z, Blocks.OAK_STAIRS);
+                else bp.addBlock(x, 5, z, Blocks.OAK_SLAB);
+            }
+        }
+
+        bp.addBlock(2, 1, 5, Blocks.HAY_BLOCK);
+        bp.addBlock(5, 1, 5, Blocks.WATER_CAULDRON);
+        bp.addBlock(8, 1, 5, Blocks.HAY_BLOCK);
+        bp.addBlock(5, 3, 4, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 19. Village Grain Windmill (9x11x9).
+     * 19. Village Grain Windmill (9x12x9) with circular stone base, wooden milling loft, and roof.
      */
     private static Blueprint createWindmill() {
-        Blueprint bp = new Blueprint("windmill", "Village Grain Windmill", 9, 11, 9);
-        bp.setCost(Stockpile.ResourceType.WOOD, 45);
-        bp.setCost(Stockpile.ResourceType.STONE, 35);
+        Blueprint bp = new Blueprint("windmill", "Village Grain Windmill", 9, 12, 9);
+        bp.setCost(Stockpile.ResourceType.WOOD, 50);
+        bp.setCost(Stockpile.ResourceType.STONE, 40);
 
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
                 bp.addBlock(x, 0, z, Blocks.STONE_BRICKS);
             }
         }
+
+        // Stone base walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 7; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isWall = (x == 1 || x == 7 || z == 1 || z == 7);
+                    if (isWall) {
+                        if (x == 4 && z == 1 && (y == 1 || y == 2)) continue; // Entrance
+                        bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    }
+                }
+            }
+            // Firmly attached interior ladder
+            bp.addLadder(4, y, 6, Direction.NORTH);
+        }
+
+        bp.addDoor(4, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Loft floor (y=5)
+        for (int x = 1; x <= 7; x++) {
+            for (int z = 1; z <= 7; z++) {
+                if (!(x == 4 && z == 6)) {
+                    bp.addBlock(x, 5, z, Blocks.OAK_PLANKS);
+                }
+            }
+        }
+
+        // Upper wooden shaft walls (y=6 to y=8)
+        for (int y = 6; y <= 8; y++) {
+            for (int x = 1; x <= 7; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isWall = (x == 1 || x == 7 || z == 1 || z == 7);
+                    if (isWall) bp.addBlock(x, y, z, Blocks.OAK_PLANKS);
+                }
+            }
+        }
+
+        // Conical pitched roof (y=9 to y=11)
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 8; z++) {
+                if (x == 0 || x == 8 || z == 0 || z == 8) bp.addBlock(x, 9, z, Blocks.DARK_OAK_STAIRS);
+                else bp.addBlock(x, 10, z, Blocks.DARK_OAK_SLAB);
+            }
+        }
+
         bp.addBlock(4, 1, 4, Blocks.HOPPER);
         bp.addBlock(4, 2, 4, Blocks.GRINDSTONE);
         bp.addBlock(3, 1, 3, Blocks.BARREL);
+        bp.addBlock(4, 6, 4, Blocks.HAY_BLOCK);
+        bp.addBlock(4, 4, 3, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 20. Mason Stonecutter Workshop (9x6x9).
+     * 20. Mason Stonecutter Workshop (9x6x9) with stone walls, door, and slab roof.
      */
     private static Blueprint createMasonWorkshop() {
         Blueprint bp = new Blueprint("mason_workshop", "Mason Stonecutter Workshop", 9, 6, 9);
-        bp.setCost(Stockpile.ResourceType.STONE, 50);
-        bp.setCost(Stockpile.ResourceType.WOOD, 15);
+        bp.setCost(Stockpile.ResourceType.STONE, 55);
+        bp.setCost(Stockpile.ResourceType.WOOD, 20);
 
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
                 bp.addBlock(x, 0, z, Blocks.POLISHED_ANDESITE);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 7; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isWall = (x == 1 || x == 7 || z == 1 || z == 7);
+                    if (isWall) {
+                        if (x == 4 && z == 1 && (y == 1 || y == 2)) continue;
+                        if ((x == 2 || x == 6) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.IRON_BARS);
+                        else bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(4, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Stone roof (y=5)
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 8; z++) {
+                bp.addBlock(x, 5, z, Blocks.STONE_BRICK_SLAB);
+            }
+        }
+
         bp.addBlock(3, 1, 4, Blocks.STONECUTTER);
         bp.addBlock(5, 1, 4, Blocks.CHISELED_STONE_BRICKS);
         bp.addBlock(6, 1, 4, Blocks.STONE_BRICKS);
+        bp.addBlock(4, 4, 4, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 21. Village Archive Library (11x7x9).
+     * 21. Village Archive Library (11x7x9) with bookshelves, reading desk, bed, and roof.
      */
     private static Blueprint createLibrary() {
         Blueprint bp = new Blueprint("library", "Village Archive Library", 11, 7, 9);
-        bp.setCost(Stockpile.ResourceType.WOOD, 45);
-        bp.setCost(Stockpile.ResourceType.STONE, 25);
+        bp.setCost(Stockpile.ResourceType.WOOD, 50);
+        bp.setCost(Stockpile.ResourceType.STONE, 30);
 
         for (int x = 0; x < 11; x++) {
             for (int z = 0; z < 9; z++) {
                 bp.addBlock(x, 0, z, Blocks.POLISHED_GRANITE);
             }
         }
-        bp.addBlock(2, 1, 3, Blocks.BOOKSHELF);
-        bp.addBlock(2, 2, 3, Blocks.BOOKSHELF);
-        bp.addBlock(4, 1, 4, Blocks.LECTERN);
-        bp.addBlock(6, 1, 4, Blocks.CARTOGRAPHY_TABLE);
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 9; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isWall = (x == 1 || x == 9 || z == 1 || z == 7);
+                    if (isWall) {
+                        if (x == 5 && z == 1 && (y == 1 || y == 2)) continue;
+                        if ((x == 3 || x == 7) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, Blocks.BIRCH_PLANKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(5, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Full Roof (y=5 to y=6)
+        for (int x = 0; x <= 10; x++) {
+            for (int z = 0; z <= 8; z++) {
+                if (z == 0 || z == 8) bp.addBlock(x, 5, z, Blocks.BIRCH_STAIRS);
+                else bp.addBlock(x, 6, z, Blocks.BIRCH_SLAB);
+            }
+        }
+
+        // Interior bookshelves lining the back wall
+        for (int x = 2; x <= 8; x++) {
+            bp.addBlock(x, 1, 6, Blocks.BOOKSHELF);
+            bp.addBlock(x, 2, 6, Blocks.BOOKSHELF);
+        }
+
+        bp.addBlock(3, 1, 3, Blocks.LECTERN);
+        bp.addBlock(7, 1, 3, Blocks.CARTOGRAPHY_TABLE);
         bp.addBed(8, 1, 4, Direction.NORTH, Blocks.BED.purple());
+        bp.addBlock(5, 4, 4, Blocks.LANTERN);
         return bp;
     }
 
     /**
-     * 22. Town Communal Hall (15x8x11).
+     * 22. Town Communal Hall (15x8x11) with timber pillars, grand double door, banquet table, and bell.
      */
     private static Blueprint createCommunalHall() {
         Blueprint bp = new Blueprint("communal_hall", "Town Communal Hall", 15, 8, 11);
-        bp.setCost(Stockpile.ResourceType.WOOD, 60);
-        bp.setCost(Stockpile.ResourceType.STONE, 40);
+        bp.setCost(Stockpile.ResourceType.WOOD, 65);
+        bp.setCost(Stockpile.ResourceType.STONE, 45);
 
         for (int x = 0; x < 15; x++) {
             for (int z = 0; z < 11; z++) {
                 bp.addBlock(x, 0, z, Blocks.POLISHED_ANDESITE);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 13; x++) {
+                for (int z = 1; z <= 9; z++) {
+                    boolean isCorner = (x == 1 || x == 13) && (z == 1 || z == 9);
+                    boolean isWall = (x == 1 || x == 13 || z == 1 || z == 9);
+                    if (isCorner) bp.addBlock(x, y, z, Blocks.OAK_LOG);
+                    else if (isWall) {
+                        if ((x == 7 || x == 8) && z == 1 && (y == 1 || y == 2)) continue; // Double door
+                        if ((x == 4 || x == 10) && (z == 1 || z == 9) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, Blocks.STONE_BRICKS);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(7, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+        bp.addDoor(8, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Vaulted pitched roof (y=5 to y=7)
+        for (int x = 0; x <= 14; x++) {
+            for (int z = 0; z <= 10; z++) {
+                if (z == 0 || z == 10) bp.addBlock(x, 5, z, Blocks.DARK_OAK_STAIRS);
+                else if (z == 1 || z == 9) bp.addBlock(x, 6, z, Blocks.DARK_OAK_STAIRS);
+                else bp.addBlock(x, 7, z, Blocks.DARK_OAK_SLAB);
+            }
+        }
+
         // Central banquet table
         for (int x = 5; x <= 9; x++) {
             bp.addBlock(x, 1, 5, Blocks.OAK_SLAB);
         }
-        bp.addBlock(7, 2, 5, Blocks.LANTERN);
-        bp.addBlock(13, 1, 5, Blocks.BELL);
+        bp.addBlock(7, 4, 5, Blocks.LANTERN);
+        bp.addBlock(12, 1, 5, Blocks.BELL);
         return bp;
     }
 
     /**
-     * 23. Combat Training Grounds (11x5x11).
+     * 23. Combat Training Grounds (11x5x11) with fenced ring, targets, and equipment shed.
      */
     private static Blueprint createTrainingYard() {
         Blueprint bp = new Blueprint("training_yard", "Combat Training Grounds", 11, 5, 11);
-        bp.setCost(Stockpile.ResourceType.WOOD, 30);
-        bp.setCost(Stockpile.ResourceType.STONE, 20);
+        bp.setCost(Stockpile.ResourceType.WOOD, 35);
+        bp.setCost(Stockpile.ResourceType.STONE, 25);
 
         for (int x = 0; x < 11; x++) {
             for (int z = 0; z < 11; z++) {
                 boolean isEdge = (x == 0 || x == 10 || z == 0 || z == 10);
-                if (isEdge) bp.addBlock(x, 1, z, Blocks.OAK_FENCE);
-                else bp.addBlock(x, 0, z, Blocks.COARSE_DIRT);
+                if (isEdge) {
+                    bp.addBlock(x, 0, z, Blocks.COBBLESTONE);
+                    if (!(x == 5 && z == 0)) {
+                        bp.addBlock(x, 1, z, Blocks.OAK_FENCE);
+                    }
+                } else {
+                    bp.addBlock(x, 0, z, Blocks.COARSE_DIRT);
+                }
             }
         }
-        bp.addBlock(3, 1, 8, Blocks.TARGET);
-        bp.addBlock(5, 1, 8, Blocks.TARGET);
-        bp.addBlock(7, 1, 8, Blocks.TARGET);
+
+        bp.addBlock(5, 1, 0, Blocks.OAK_FENCE_GATE);
+
+        // Equipment shed in corner (x=1..4, z=7..9)
+        for (int y = 1; y <= 3; y++) {
+            bp.addBlock(1, y, 7, Blocks.OAK_LOG);
+            bp.addBlock(4, y, 7, Blocks.OAK_LOG);
+            bp.addBlock(1, y, 9, Blocks.OAK_LOG);
+            bp.addBlock(4, y, 9, Blocks.OAK_LOG);
+        }
+        for (int x = 1; x <= 4; x++) {
+            for (int z = 7; z <= 9; z++) {
+                bp.addBlock(x, 4, z, Blocks.OAK_SLAB);
+            }
+        }
+
+        bp.addBlock(2, 1, 8, Blocks.CHEST);
+        bp.addBlock(3, 1, 8, Blocks.ANVIL);
+        bp.addBlock(2, 3, 8, Blocks.LANTERN);
+
+        // Targets on north side
+        bp.addBlock(7, 1, 8, Blocks.HAY_BLOCK);
+        bp.addBlock(7, 2, 8, Blocks.TARGET);
+        bp.addBlock(9, 1, 8, Blocks.HAY_BLOCK);
+        bp.addBlock(9, 2, 8, Blocks.TARGET);
+
         return bp;
     }
 
     /**
-     * 24. Village Apothecary & Clinic (9x6x9) with 2 recovery beds.
+     * 24. Village Apothecary & Clinic (9x6x9) with 2 recovery beds, brewing station, and solid roof.
      */
     private static Blueprint createClericClinic() {
         Blueprint bp = new Blueprint("cleric_clinic", "Village Apothecary Clinic", 9, 6, 9);
-        bp.setCost(Stockpile.ResourceType.WOOD, 30);
-        bp.setCost(Stockpile.ResourceType.STONE, 30);
+        bp.setCost(Stockpile.ResourceType.WOOD, 35);
+        bp.setCost(Stockpile.ResourceType.STONE, 35);
 
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
                 bp.addBlock(x, 0, z, Blocks.POLISHED_DIORITE);
             }
         }
+
+        // Walls (y=1 to y=4)
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 7; x++) {
+                for (int z = 1; z <= 7; z++) {
+                    boolean isWall = (x == 1 || x == 7 || z == 1 || z == 7);
+                    if (isWall) {
+                        if (x == 4 && z == 1 && (y == 1 || y == 2)) continue;
+                        if ((x == 2 || x == 6) && (z == 1 || z == 7) && y == 2) bp.addBlock(x, y, z, Blocks.GLASS_PANE);
+                        else bp.addBlock(x, y, z, Blocks.POLISHED_DIORITE);
+                    }
+                }
+            }
+        }
+
+        bp.addDoor(4, 1, 1, Direction.SOUTH, Blocks.OAK_DOOR);
+
+        // Solid Roof (y=5)
+        for (int x = 0; x <= 8; x++) {
+            for (int z = 0; z <= 8; z++) {
+                bp.addBlock(x, 5, z, Blocks.QUARTZ_SLAB);
+            }
+        }
+
         bp.addBed(2, 1, 3, Direction.NORTH, Blocks.BED.cyan());
         bp.addBed(6, 1, 3, Direction.NORTH, Blocks.BED.cyan());
         bp.addBlock(4, 1, 5, Blocks.BREWING_STAND);
         bp.addBlock(4, 1, 4, Blocks.WATER_CAULDRON);
         bp.addBlock(2, 1, 5, Blocks.CHEST);
+        bp.addBlock(4, 4, 4, Blocks.LANTERN);
         return bp;
     }
 }

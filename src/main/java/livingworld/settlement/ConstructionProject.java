@@ -61,6 +61,10 @@ public class ConstructionProject {
         return placedBlocks;
     }
 
+    public int getCurrentBlockIndex() {
+        return placedBlocks;
+    }
+
     public boolean isComplete() {
         return complete;
     }

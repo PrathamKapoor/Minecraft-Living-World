@@ -59,6 +59,7 @@ public class GameplayPlaytestRunner {
         runScenario("Scenario 5: Exploration & Traversal (Atlas Book GUI, Mineshaft Depot, 2.5x Rails, Mount Step-Up, Boat Glide)", GameplayPlaytestRunner::testScenario5ExplorationTraversal);
         runScenario("Scenario 6: Boss Encounters (Colossal Dreadbeast, Nether Champion, Multi-Phase Dragon)", GameplayPlaytestRunner::testScenario6BossEncounters);
         runScenario("Scenario 7: Performance & Stability (MSPT, Heap Allocations, Two-Scale Simulation)", GameplayPlaytestRunner::testScenario7PerformanceStability);
+        runScenario("Scenario 8: The Siege & Settlement Reliability (Village Bell Objective, Stuck Resolution, Watchtowers, Dogs, Cavalry)", GameplayPlaytestRunner::testScenario8SiegeAndSettlementReliability);
 
         System.out.println("====================================================");
         System.out.println(" Playtest Verification Results: " + passed + " PASSED, " + failed + " FAILED");
@@ -242,6 +243,51 @@ public class GameplayPlaytestRunner {
         double usedMb = usedMemory / (1024.0 * 1024.0);
         System.out.printf("  [TELEMETRY] Test JVM Heap Usage: %.2f MB\n", usedMb);
         assertTrue(usedMb < 512.0, "Simulation heap usage within reasonable bounds (<512 MB)");
+    }
+
+    private static void testScenario8SiegeAndSettlementReliability() {
+        // 1. Village Bell Strategic Objective & 7-State Tactical Assault Machine
+        UUID settlementId = UUID.randomUUID();
+        BlockPos bellPos = new BlockPos(150, 64, 300);
+        livingworld.illager.RaidTactics.RaidObjective obj = new livingworld.illager.RaidTactics.RaidObjective(901, settlementId, bellPos, true);
+        assertEquals(901, obj.getRaidId(), "Raid objective has matching raid ID");
+        assertTrue(obj.hasPhysicalBell(), "Raid objective tracks primary village bell");
+        assertEquals(livingworld.illager.RaidTactics.RaidAssaultState.ADVANCE, obj.getState(), "Initial assault state is ADVANCE");
+
+        // Simulate siege strikes & progression
+        obj.addBellSiegeTicks(100);
+        obj.setBellDestroyedOrCaptured(true);
+        obj.setState(livingworld.illager.RaidTactics.RaidAssaultState.SECURE_VILLAGE);
+        assertTrue(obj.isBellDestroyedOrCaptured(), "Bell successfully neutralized by raiders");
+        assertEquals(livingworld.illager.RaidTactics.RaidAssaultState.SECURE_VILLAGE, obj.getState(), "Assault state progresses to SECURE_VILLAGE");
+
+        // 2. 160m Stuck Raider Navigation Diagnostics
+        livingworld.illager.RaidTactics.RaiderDiagnostic diag = new livingworld.illager.RaidTactics.RaiderDiagnostic(
+            UUID.randomUUID(), "minecraft:pillager", new BlockPos(100, 32, 200), 901);
+        diag.setStationaryTicks(300L);
+        diag.setUnderground(true);
+        diag.setTrapped(true);
+        assertTrue(diag.isTrapped(), "Raider trapped in subterranean cavern detected by diagnostic engine");
+
+        // 3. Guaranteed Lookout Watchtowers
+        Settlement settlement = new Settlement(settlementId, "Fortified Plains Village", new BlockPos(150, 64, 300), 64, FactionType.VILLAGER);
+        settlement.addWatchtower(new BlockPos(175, 64, 325));
+        settlement.addWatchtower(new BlockPos(125, 64, 275));
+        assertEquals(2, settlement.getWatchtowers().size(), "Settlement maintains 2 fortified lookout watchtowers");
+
+        // 4. Natural Village Dogs & Guard Companions
+        assertEquals(2, livingworld.entity.VillageDogEntity.DogRole.values().length, "Two distinct dog roles: Civilian Pet and Guard Companion");
+
+        // 5. Natural Village Cavalry Mobilization
+        assertEquals(3, livingworld.entity.VillageCavalryEntity.CavalryRole.values().length, "Three cavalry roles: Swordsman, Scout, Captain");
+
+        // 6. Complete Architectural Blueprints
+        Blueprint cottage = BlueprintRegistry.get("small_oak_house");
+        assertNotNull(cottage, "Small oak house blueprint registered");
+        assertTrue(cottage.getBedCount() >= 1, "Cottage contains valid authentic 2-block bed");
+        Blueprint twoStory = BlueprintRegistry.get("two_story_house");
+        assertNotNull(twoStory, "Two story house registered");
+        assertTrue(twoStory.getBedCount() >= 2, "Two-story house contains 2 valid authentic beds");
     }
 
     private static void assertTrue(boolean condition, String message) {

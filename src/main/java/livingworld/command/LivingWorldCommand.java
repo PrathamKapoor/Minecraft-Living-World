@@ -9,6 +9,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.core.particles.ParticleTypes;
+import livingworld.entity.VillageArcherEntity;
+import livingworld.entity.VillageGuardEntity;
+import livingworld.entity.VillageCavalryEntity;
+import livingworld.entity.VillageDogEntity;
 import livingworld.illager.RaidTactics;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -96,6 +102,29 @@ public class LivingWorldCommand {
                 .then(Commands.literal("trial_guide").executes(LivingWorldCommand::executeTrialGuide))
                 .then(Commands.literal("map").executes(LivingWorldCommand::executeOpenMap))
                 .then(Commands.literal("debug")
+                    .then(Commands.literal("raid")
+                        .then(Commands.literal("objective").executes(LivingWorldCommand::executeDebugRaidObjective))
+                        .then(Commands.literal("raiders").executes(LivingWorldCommand::executeDebugRaidRaiders))
+                        .then(Commands.literal("stuck").executes(LivingWorldCommand::executeDebugRaidStuck))
+                        .then(Commands.literal("bell").executes(LivingWorldCommand::executeDebugRaidBell))
+                        .then(Commands.literal("status").executes(LivingWorldCommand::executeRaidStatus))
+                        .then(Commands.literal("resolve").executes(LivingWorldCommand::executeRaidResolve)))
+                    .then(Commands.literal("village")
+                        .then(Commands.literal("towers").executes(LivingWorldCommand::executeDebugVillageTowers))
+                        .then(Commands.literal("buildings").executes(LivingWorldCommand::executeDebugVillageBuildings))
+                        .then(Commands.literal("construction").executes(LivingWorldCommand::executeDebugVillageConstruction))
+                        .then(Commands.literal("dogs").executes(LivingWorldCommand::executeDebugVillageDogs)))
+                    .then(Commands.literal("cavalry")
+                        .then(Commands.literal("status").executes(LivingWorldCommand::executeDebugCavalryStatus)))
+                    .then(Commands.literal("military")
+                        .then(Commands.literal("patrols").executes(LivingWorldCommand::executeDebugMilitaryPatrols)))
+                    .then(Commands.literal("raiders")
+                        .then(Commands.literal("count").executes(LivingWorldCommand::executeRaidersCount))
+                        .then(Commands.literal("list").executes(LivingWorldCommand::executeRaidersList))
+                        .then(Commands.literal("teleport")
+                            .then(Commands.argument("radius", com.mojang.brigadier.arguments.IntegerArgumentType.integer(10, 256))
+                                .executes(LivingWorldCommand::executeRaidersTeleportRadius))
+                            .executes(LivingWorldCommand::executeRaidersTeleportDefault)))
                     .then(Commands.literal("zombie")
                         .then(Commands.literal("miner")
                             .then(Commands.literal("spawn")
@@ -159,18 +188,6 @@ public class LivingWorldCommand {
                     .then(Commands.literal("list").executes(LivingWorldCommand::executeProfessionsList)))
                 .then(Commands.literal("golems")
                     .then(Commands.literal("status").executes(LivingWorldCommand::executeGolemsStatus)))
-                .then(Commands.literal("debug")
-                    .then(Commands.literal("raiders")
-                        .then(Commands.literal("count").executes(LivingWorldCommand::executeRaidersCount))
-                        .then(Commands.literal("list").executes(LivingWorldCommand::executeRaidersList))
-                        .then(Commands.literal("teleport")
-                            .then(Commands.argument("radius", com.mojang.brigadier.arguments.IntegerArgumentType.integer(10, 256))
-                                .executes(LivingWorldCommand::executeRaidersTeleportRadius))
-                            .executes(LivingWorldCommand::executeRaidersTeleportDefault)))
-                    .then(Commands.literal("raid")
-                        .then(Commands.literal("status").executes(LivingWorldCommand::executeRaidStatus))
-                        .then(Commands.literal("stuck").executes(LivingWorldCommand::executeRaidStuck))
-                        .then(Commands.literal("resolve").executes(LivingWorldCommand::executeRaidResolve))))
                 .then(Commands.literal("scar")
                     .then(Commands.literal("generate")
                         .then(Commands.literal("warped").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.WARPED_FOREST)))
@@ -193,7 +210,7 @@ public class LivingWorldCommand {
 
     private static int executeStatus(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
-        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.5)"), false);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.7)"), false);
         source.sendSuccess(() -> Component.literal("§7Target: Minecraft 26.3 | Fabric 0.20.1 | Java 25"), false);
         int villageCount = SettlementManager.get().getAllSettlements().size();
         source.sendSuccess(() -> Component.literal("§7Active Settlements: §e" + villageCount), false);
@@ -392,7 +409,7 @@ public class LivingWorldCommand {
                 int groundY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, colX, colZ);
                 for (int y = baseY - 1; y >= groundY; y--) {
                     BlockPos foundationPos = new BlockPos(colX, y, colZ);
-                    if (!level.getBlockState(foundationPos).isSolid()) {
+                    if (level.isLoaded(foundationPos) && !level.getBlockState(foundationPos).isSolid()) {
                         level.setBlock(foundationPos, (y == baseY - 1 ? net.minecraft.world.level.block.Blocks.STONE_BRICKS : net.minecraft.world.level.block.Blocks.COBBLESTONE).defaultBlockState(), 3);
                     }
                 }
@@ -1347,5 +1364,317 @@ public class LivingWorldCommand {
         source.sendSuccess(() -> Component.literal(String.format("§6[Living World] §eNearest Dimensional Scar: §f%s §7at (%d, %d, %d) | Distance: §a%.1fm",
             scar.getType().getTitle(), c.getX(), c.getY(), c.getZ(), dist)), false);
         return 1;
+    }
+
+    // =========================================================================
+    // v0.2.7 RELIABILITY & SIEGE DEBUG COMMANDS
+    // =========================================================================
+
+    private static int executeDebugRaidObjective(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Tactical Raid Objective Diagnostic ==="), false);
+
+        RaidTactics.RaidObjective obj = null;
+        if (s != null) {
+            obj = RaidTactics.get().getRaidObjective(s.getId().hashCode());
+        }
+        if (obj == null) {
+            var raid = level.getRaidAt(pos);
+            if (raid != null) {
+                var rId = level.getRaids().getId(raid);
+                if (rId.isPresent()) {
+                    obj = RaidTactics.get().getRaidObjective(rId.getAsInt());
+                }
+            }
+        }
+        if (obj == null) {
+            var all = RaidTactics.get().getAllRaidObjectives();
+            if (!all.isEmpty()) obj = all.iterator().next();
+        }
+
+        if (obj == null) {
+            source.sendSuccess(() -> Component.literal("  §7No active raid tactical objective found in this sector."), false);
+            return 0;
+        }
+
+        final var fObj = obj;
+        BlockPos bellPos = fObj.getBellPos();
+        double dist = bellPos != null ? Math.sqrt(bellPos.distSqr(pos)) : 0.0;
+        source.sendSuccess(() -> Component.literal("  Tactical Phase: §e" + fObj.getState().name() + " §7(" + fObj.getState().getDisplay() + ")"), false);
+        source.sendSuccess(() -> Component.literal("  Target Bell: §f" + (bellPos != null ? String.format("(%d, %d, %d)", bellPos.getX(), bellPos.getY(), bellPos.getZ()) : "None") + " §7(Physical: " + (fObj.hasPhysicalBell() ? "§aYES§7" : "§cNO§7") + ")"), false);
+        source.sendSuccess(() -> Component.literal("  Distance to Bell: §a" + String.format("%.1fm", dist)), false);
+        source.sendSuccess(() -> Component.literal("  Siege Progress: §c" + fObj.getBellSiegeTicks() + "/100 ticks"), false);
+        source.sendSuccess(() -> Component.literal("  Active Attacking Raiders: §f" + fObj.getActiveRaiderCount()), false);
+        source.sendSuccess(() -> Component.literal("  Bell Silenced / Destroyed: §f" + (fObj.isBellDestroyedOrCaptured() ? "§cYES" : "§aNO")), false);
+        return 1;
+    }
+
+    private static int executeDebugRaidRaiders(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        AABB searchBox = AABB.ofSize(new Vec3(pos.getX(), pos.getY(), pos.getZ()), 320, 128, 320);
+        List<Raider> raiders = level.getEntitiesOfClass(Raider.class, searchBox, r -> r.isAlive());
+
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Active Raiders Diagnostic (" + raiders.size() + " total within 160m) ==="), false);
+        if (raiders.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No active raiders detected within 160m."), false);
+            return 0;
+        }
+
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        BlockPos bellPos = s != null ? s.getCenter() : pos;
+        if (s != null) {
+            var obj = RaidTactics.get().getRaidObjective(s.getId().hashCode());
+            if (obj != null && obj.getBellPos() != null) bellPos = obj.getBellPos();
+        }
+
+        int count = 0;
+        for (Raider r : raiders) {
+            if (++count > 15) {
+                source.sendSuccess(() -> Component.literal("  §7... and " + (raiders.size() - 15) + " more raiders."), false);
+                break;
+            }
+            BlockPos rp = r.blockPosition();
+            double distToBell = bellPos != null ? Math.sqrt(bellPos.distSqr(rp)) : 0;
+            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, rp.getX(), rp.getZ());
+            boolean underground = (surfaceY - rp.getY()) >= 6;
+            var diag = RaidTactics.get().getDiagnostic(r.getUUID());
+            boolean stuck = diag != null && (diag.isTrapped() || diag.getStationaryTicks() > 100);
+
+            source.sendSuccess(() -> Component.literal(String.format("  • [%s] at (%d, %d, %d) | DistToBell: %.1fm | Stuck: %s | Underground: %s",
+                r.getType().getDescription().getString(), rp.getX(), rp.getY(), rp.getZ(),
+                distToBell, stuck ? "§cYES" : "§aNO", underground ? "§cYES" : "§aNO")), false);
+        }
+        return raiders.size();
+    }
+
+    private static int executeDebugRaidStuck(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Stuck Raider Engine Diagnostics (160m Radius) ==="), false);
+        List<Raider> stuck = RaidTactics.get().getStuckRaiders(level, pos, 160.0);
+        if (stuck.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §aNo stuck or inaccessible raiders detected within 160m."), false);
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("  §cDetected " + stuck.size() + " stuck raiders. Executing surface road recovery..."), false);
+        int recovered = RaidTactics.get().recoverStuckRaiders(level, pos, 160.0);
+        source.sendSuccess(() -> Component.literal("  §aAction: Successfully recovered §f" + recovered + " §astuck raiders to surface roads."), true);
+        return recovered;
+    }
+
+    private static int executeDebugRaidBell(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Targeted Village Bell Status ==="), false);
+
+        BlockPos bellPos = null;
+        RaidTactics.RaidObjective obj = null;
+        if (s != null) {
+            obj = RaidTactics.get().getRaidObjective(s.getId().hashCode());
+            if (obj != null && obj.getBellPos() != null) {
+                bellPos = obj.getBellPos();
+            } else {
+                bellPos = RaidTactics.get().findVillageBell(level, s.getCenter(), s.getRadius() + 32);
+            }
+        }
+
+        if (bellPos == null) {
+            bellPos = RaidTactics.get().findVillageBell(level, pos, 64);
+        }
+
+        if (bellPos == null) {
+            source.sendSuccess(() -> Component.literal("  §cNo village bell found in this sector!"), false);
+            return 0;
+        }
+
+        final BlockPos bp = bellPos;
+        boolean isBellBlock = level.getBlockState(bp).is(Blocks.BELL);
+        int siegeTicks = obj != null ? obj.getBellSiegeTicks() : 0;
+        boolean destroyedOrSilenced = obj != null && obj.isBellDestroyedOrCaptured();
+
+        source.sendSuccess(() -> Component.literal(String.format("  Bell Coordinates: §a(%d, %d, %d)", bp.getX(), bp.getY(), bp.getZ())), false);
+        source.sendSuccess(() -> Component.literal("  Physical Bell Exists: " + (isBellBlock ? "§aYES" : "§cNO (Destroyed/Missing)")), false);
+        source.sendSuccess(() -> Component.literal("  Siege Strike Progress: §e" + siegeTicks + "/100 ticks"), false);
+        source.sendSuccess(() -> Component.literal("  Status: " + (destroyedOrSilenced ? "§cSILENCED / BREACHED" : "§aFUNCTIONAL")), false);
+
+        level.sendParticles(ParticleTypes.CRIT, bp.getX() + 0.5, bp.getY() + 0.5, bp.getZ() + 0.5, 30, 0.5, 0.5, 0.5, 0.2);
+        return 1;
+    }
+
+    private static int executeDebugVillageTowers(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§cNo settlement found nearby."));
+            return 0;
+        }
+        List<BlockPos> towersList = s.getWatchtowers();
+        if (towersList.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No perimeter watchtowers registered yet. Generating 2 towers now..."), false);
+            SettlementManager.get().ensureWatchtowers(level, s);
+            towersList = s.getWatchtowers();
+        }
+        final List<BlockPos> finalTowers = towersList;
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Watchtowers for " + s.getName() + " (" + finalTowers.size() + " registered) ==="), false);
+
+        int idx = 1;
+        for (BlockPos tp : finalTowers) {
+            final int fIdx = idx;
+            int dx = tp.getX() - s.getCenter().getX();
+            int dz = tp.getZ() - s.getCenter().getZ();
+            String orientation = (dz < 0 ? "North" : "South") + "-" + (dx < 0 ? "West" : "East");
+            AABB sentryBox = AABB.ofSize(new Vec3(tp.getX() + 3.5, tp.getY() + 10, tp.getZ() + 3.5), 10, 8, 10);
+            List<VillageArcherEntity> archers = level.getEntitiesOfClass(VillageArcherEntity.class, sentryBox, a -> a.isAlive());
+            boolean sentryPresent = !archers.isEmpty();
+            final String line = String.format("  [%d] Tower at (%d, %d, %d) | Perimeter: §e%s §7| Sentry: %s §7(Elevated Archers: %d)",
+                fIdx, tp.getX(), tp.getY(), tp.getZ(), orientation, sentryPresent ? "§aYES" : "§cNO", archers.size());
+            source.sendSuccess(() -> Component.literal(line), false);
+            idx++;
+        }
+        return finalTowers.size();
+    }
+
+    private static int executeDebugVillageBuildings(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§cNo settlement found nearby."));
+            return 0;
+        }
+        var buildings = s.getBuildings();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Registered Buildings for " + s.getName() + " (" + buildings.size() + ") ==="), false);
+        if (buildings.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No custom blueprints placed yet; vanilla village structures active."), false);
+        } else {
+            int i = 1;
+            for (var b : buildings) {
+                final int fi = i;
+                BlockPos bp = b.getPos();
+                final String line = String.format("  [%d] %s at (%d, %d, %d) | Status: %s | Beds: %d",
+                    fi, b.getBlueprintId(), bp.getX(), bp.getY(), bp.getZ(), b.isCompleted() ? "§aCOMPLETED" : "§eUNDER_CONSTRUCTION", b.getBedCount());
+                source.sendSuccess(() -> Component.literal(line), false);
+                i++;
+            }
+        }
+        return buildings.size();
+    }
+
+    private static int executeDebugVillageConstruction(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§cNo settlement found nearby."));
+            return 0;
+        }
+        ConstructionProject proj = s.getActiveProject();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Construction Diagnostic for " + s.getName() + " ==="), false);
+        if (proj == null) {
+            source.sendSuccess(() -> Component.literal("  Active Project: §7None (Idle)"), false);
+            source.sendSuccess(() -> Component.literal("  Queued Projects: §e" + s.getQueuedProjectsCount()), false);
+            return 0;
+        }
+
+        double pct = proj.getProgress() * 100.0;
+        source.sendSuccess(() -> Component.literal("  Active Project: §e" + proj.getBlueprintId() + " §7at (" + proj.getOrigin().getX() + ", " + proj.getOrigin().getY() + ", " + proj.getOrigin().getZ() + ")"), false);
+        source.sendSuccess(() -> Component.literal(String.format("  Progress: §a%.1f%% §7(Blocks Placed: %d / %d)", pct, proj.getCurrentBlockIndex(), proj.getTotalBlocks())), false);
+        source.sendSuccess(() -> Component.literal("  Queued Projects: §f" + s.getQueuedProjectsCount()), false);
+        return 1;
+    }
+
+    private static int executeDebugVillageDogs(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§cNo settlement found nearby."));
+            return 0;
+        }
+        AABB villageArea = AABB.ofSize(new Vec3(s.getCenter().getX(), s.getCenter().getY(), s.getCenter().getZ()), s.getRadius() * 2, 40, s.getRadius() * 2);
+        List<VillageDogEntity> dogs = level.getEntitiesOfClass(VillageDogEntity.class, villageArea, d -> d.isAlive());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Village Dogs in " + s.getName() + " (" + dogs.size() + " dogs) ==="), false);
+        if (dogs.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No village dogs currently present in settlement perimeter."), false);
+            return 0;
+        }
+        int i = 1;
+        for (var dog : dogs) {
+            final int fi = i;
+            BlockPos dp = dog.blockPosition();
+            String roleStr = dog.getRole() == VillageDogEntity.DogRole.GUARD_COMPANION ? "§6Guard Companion" : "§aCivilian Pet";
+            String handlerStr = dog.getHandlerEntity() != null ? dog.getHandlerEntity().getName().getString() :
+                (dog.getGuardHandlerUuid() != null ? dog.getGuardHandlerUuid().toString().substring(0, 8) : "None");
+            final String line = String.format("  [%d] Role: %s §7at (%d, %d, %d) | Handler: §f%s",
+                fi, roleStr, dp.getX(), dp.getY(), dp.getZ(), handlerStr);
+            source.sendSuccess(() -> Component.literal(line), false);
+            i++;
+        }
+        return dogs.size();
+    }
+
+    private static int executeDebugCavalryStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        AABB searchArea = AABB.ofSize(new Vec3(pos.getX(), pos.getY(), pos.getZ()), 256, 64, 256);
+        List<VillageCavalryEntity> cavList = level.getEntitiesOfClass(VillageCavalryEntity.class, searchArea, c -> c.isAlive());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Village Cavalry Status (" + cavList.size() + " active) ==="), false);
+        if (cavList.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No cavalry units deployed within 128m radius."), false);
+            return 0;
+        }
+        int idx = 1;
+        for (var cav : cavList) {
+            final int fIdx = idx;
+            BlockPos cp = cav.blockPosition();
+            boolean mounted = cav.isPassenger();
+            String horseInfo = "Unmounted";
+            if (mounted && cav.getVehicle() instanceof net.minecraft.world.entity.animal.equine.Horse horse) {
+                horseInfo = String.format("Horse HP: %.1f/%.1f | Armored: %s", horse.getHealth(), horse.getMaxHealth(), !horse.getBodyArmorItem().isEmpty() ? "§aYES" : "§7NO");
+            }
+            final String finalHorseInfo = horseInfo;
+            final String line = String.format("  [%d] Role: §e%s §7| UUID: %s | Pos: (%d, %d, %d) | %s",
+                fIdx, cav.getCavalryRole().name(), cav.getUUID().toString().substring(0, 8), cp.getX(), cp.getY(), cp.getZ(), finalHorseInfo);
+            source.sendSuccess(() -> Component.literal(line), false);
+            idx++;
+        }
+        return cavList.size();
+    }
+
+    private static int executeDebugMilitaryPatrols(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§cNo settlement found nearby."));
+            return 0;
+        }
+        var state = livingworld.faction.VillageDefenseController.get().getState(s.getId());
+        AABB villageArea = AABB.ofSize(new Vec3(s.getCenter().getX(), s.getCenter().getY(), s.getCenter().getZ()), s.getRadius() * 2, 40, s.getRadius() * 2);
+        List<VillageGuardEntity> guards = level.getEntitiesOfClass(VillageGuardEntity.class, villageArea, g -> g.isAlive());
+        List<VillageArcherEntity> archers = level.getEntitiesOfClass(VillageArcherEntity.class, villageArea, a -> a.isAlive());
+        List<VillageCavalryEntity> cav = level.getEntitiesOfClass(VillageCavalryEntity.class, villageArea, c -> c.isAlive());
+
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Military Patrol & Defense Readiness: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("  Threat Posture: " + state.getThreatLevel().getDisplay()), false);
+        source.sendSuccess(() -> Component.literal("  Primary Threat: §f" + state.getPrimaryThreatDescription()), false);
+        BlockPos rally = state.getActiveThreatPos() != null ? state.getActiveThreatPos() : s.getCenter();
+        source.sendSuccess(() -> Component.literal(String.format("  Active Rally Point: §a(%d, %d, %d)", rally.getX(), rally.getY(), rally.getZ())), false);
+        source.sendSuccess(() -> Component.literal(String.format("  Forces Deployed: §b%d Melee Guards §7| §e%d Archers §7| §6%d Cavalry",
+            guards.size(), archers.size(), cav.size())), false);
+        return guards.size() + archers.size() + cav.size();
     }
 }

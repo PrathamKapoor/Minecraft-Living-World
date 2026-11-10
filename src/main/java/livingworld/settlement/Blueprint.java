@@ -7,8 +7,11 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
  * Modular Vanilla Architectural Blueprint Specification (v0.2.5 Living Village Rebuild).
@@ -86,6 +89,28 @@ public class Blueprint {
         } else {
             addBlock(footX, footY, footZ, bedBlock);
         }
+        return this;
+    }
+
+    public Blueprint addDoor(int x, int y, int z, Direction facing, Block doorBlock) {
+        if (doorBlock instanceof DoorBlock) {
+            BlockState lower = doorBlock.defaultBlockState()
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER)
+                .setValue(DoorBlock.FACING, facing);
+            BlockState upper = doorBlock.defaultBlockState()
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER)
+                .setValue(DoorBlock.FACING, facing);
+            addBlock(x, y, z, lower);
+            addBlock(x, y + 1, z, upper);
+        } else {
+            addBlock(x, y, z, doorBlock);
+        }
+        return this;
+    }
+
+    public Blueprint addLadder(int x, int y, int z, Direction facing) {
+        BlockState state = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, facing);
+        addBlock(x, y, z, state);
         return this;
     }
 

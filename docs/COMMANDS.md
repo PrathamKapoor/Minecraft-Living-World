@@ -132,3 +132,31 @@ All Living World commands are registered under the root `/livingworld` command t
 | `/livingworld armory stock` | All | Displays physical armory inventory (iron/diamond swords, bows, arrows, shields, armor pieces, splash healing potions) and gear availability for new recruits. |
 | `/livingworld professions list` | All | Displays the complete 13-profession demographic census (Farmer, Fisherman, Fletcher, Shepherd, Butcher, Leatherworker, Librarian, Cartographer, Cleric, Armorer, Weaponsmith, Toolsmith, Mason) with staffed/deficit statuses. |
 | `/livingworld golems status` | All | Displays active Iron Golem and Snow Golem defense forces, calculated quotas, climate conditions, and health status for the settlement. |
+
+---
+
+## 8. Version 0.2.7 The Siege & Settlement Reliability Debug Commands
+
+### Tactical Raid & Bell Siege Diagnostics
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld debug raid objective` | All | Displays the active raid tactical assault phase (`ASSEMBLE`, `ADVANCE`, `ENGAGE_DEFENDERS`, `BREACH`, `ATTACK_BELL`, `SECURE_VILLAGE`, `VICTORY`), primary targeted village bell coordinates, physical presence status, distance, siege strike progress (0–100 ticks), and active raider count. |
+| `/livingworld debug raid raiders` | All | Comprehensive 160m-radius diagnostic list of all active invasion raiders, including entity type, coordinates, distance to target bell, trapped/stuck status, and underground status. |
+| `/livingworld debug raid stuck` | All | Inspects for stationary/inaccessible raiders within 160m and automatically triggers surface road navigation recovery. |
+| `/livingworld debug raid bell` | All | Displays physical block status of targeted settlement bell, siege progress, and emits visual diagnostic particles at bell position. |
+| `/livingworld debug raid status` | All | Displays overall wave progression, raiders remaining alive, raid win/loss state, and settlement defense posture. |
+| `/livingworld debug raid resolve` | OP (Level 2) | Executes emergency navigation recovery for all trapped/stuck raiders within 96m to village surface roads. |
+
+### Settlement Infrastructure & Architecture Diagnostics
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld debug village towers` | All | Inspects defensive watchtower count (guarantees 2 lookout positions per village), perimeter orientation, platform height (y=10), and elevated sentry archer presence. Generates towers if missing. |
+| `/livingworld debug village buildings` | All | Lists all registered settlement blueprints, coordinates, completion status (`COMPLETED` or `UNDER_CONSTRUCTION`), and POI bed counts. |
+| `/livingworld debug village construction` | All | Displays progress of current active block-by-block construction project (blocks placed, total blocks, percentage) and queued projects count. |
+
+### Companion Dogs, Cavalry & Patrols
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld debug village dogs` | All | Lists all village dogs within settlement perimeter, roles (`Civilian Pet` or `Guard Companion`), coordinates, and associated guard handler UUIDs. |
+| `/livingworld debug cavalry status` | All | Displays deployed village cavalry units within 128m, role (`MOUNTED_SWORDSMAN`, `MOUNTED_SCOUT`, `MOUNTED_CAPTAIN`), UUID, coordinates, horse mount health, and armor status. |
+| `/livingworld debug military patrols` | All | Comprehensive military readiness diagnostic for the local settlement: threat posture, active rally point, primary threat, and total forces deployed across melee guards, archers, and cavalry. |

@@ -19,6 +19,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -143,16 +144,17 @@ public class VillageGuardManager {
         AABB villageArea = AABB.ofSize(new Vec3(center.getX(), center.getY(), center.getZ()),
             settlement.getRadius() * 2, 24, settlement.getRadius() * 2);
 
+        // Maintain natural village dogs (Civilian Pets and Guard Companions)
+        tickSettlementDogs(level, settlement);
+
         List<VillageGuardEntity> currentGuards = level.getEntitiesOfClass(VillageGuardEntity.class, villageArea, g -> g.isAlive());
         List<VillageArcherEntity> currentArchers = level.getEntitiesOfClass(VillageArcherEntity.class, villageArea, a -> a.isAlive());
-        int totalMilitary = currentGuards.size() + currentArchers.size();
+        List<livingworld.entity.VillageCavalryEntity> currentCavalry = level.getEntitiesOfClass(livingworld.entity.VillageCavalryEntity.class, villageArea, c -> c.isAlive());
+        int totalMilitary = currentGuards.size() + currentArchers.size() + currentCavalry.size();
         settlement.setGuardCount(totalMilitary);
 
         // Target military force: 1 guard per 3 villagers, minimum 2 for small villages, up to 12
         int desiredGuards = Math.max(2, Math.min(12, settlement.getPopulation() / 3));
-        if (totalMilitary >= desiredGuards) {
-            return;
-        }
 
         // Locate eligible unemployed adult villagers to enlist
         List<Villager> availableCivilians = level.getEntitiesOfClass(Villager.class, villageArea,
@@ -160,6 +162,27 @@ public class VillageGuardManager {
 
         // Maintain at least 4 civilians to preserve essential community professions and breeding
         if (availableCivilians.size() <= 4) {
+            return;
+        }
+
+        // Natural Village Cavalry Recruitment: 1 cavalry if military >= 3, 2 if >= 6
+        int targetCavalry = (desiredGuards >= 6) ? 2 : (desiredGuards >= 3 ? 1 : 0);
+        if (currentCavalry.size() < targetCavalry) {
+            Villager cavCandidate = availableCivilians.get(level.getRandom().nextInt(availableCivilians.size()));
+            BlockPos cavPos = cavCandidate.blockPosition();
+            livingworld.entity.VillageCavalryEntity.CavalryRole role = currentCavalry.isEmpty()
+                ? livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN
+                : livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SCOUT;
+
+            boolean recruited = forceRecruitCavalry(level, settlement, cavPos, role);
+            if (recruited) {
+                cavCandidate.discard();
+                availableCivilians.remove(cavCandidate);
+                return;
+            }
+        }
+
+        if (totalMilitary >= desiredGuards) {
             return;
         }
 
@@ -362,6 +385,49 @@ public class VillageGuardManager {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Naturally maintains 2-4 civilian dogs and 1 guard companion dog per 4 melee guards.
+     */
+    public void tickSettlementDogs(ServerLevel level, Settlement settlement) {
+        if (settlement == null || level == null) return;
+        BlockPos center = settlement.getCenter();
+        AABB villageArea = AABB.ofSize(new Vec3(center.getX(), center.getY(), center.getZ()),
+            settlement.getRadius() * 2, 24, settlement.getRadius() * 2);
+
+        List<livingworld.entity.VillageDogEntity> dogs = level.getEntitiesOfClass(
+            livingworld.entity.VillageDogEntity.class, villageArea, d -> d.isAlive());
+
+        int civilianDogs = 0;
+        int guardDogs = 0;
+        for (var dog : dogs) {
+            if (dog.getRole() == livingworld.entity.VillageDogEntity.DogRole.CIVILIAN_PET) civilianDogs++;
+            else guardDogs++;
+        }
+
+        // 1. Natural Civilian Dogs: 2 to 4 dogs per settlement
+        int targetCivDogs = Math.max(2, Math.min(4, settlement.getPopulation() / 4));
+        if (civilianDogs < targetCivDogs) {
+            int dx = level.getRandom().nextInt(21) - 10;
+            int dz = level.getRandom().nextInt(21) - 10;
+            BlockPos dogPos = center.offset(dx, 0, dz);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, dogPos.getX(), dogPos.getZ());
+            BlockPos spawnPos = new BlockPos(dogPos.getX(), y, dogPos.getZ());
+            if (level.isLoaded(spawnPos) && level.getBlockState(spawnPos.below()).isSolid()) {
+                forceSpawnDog(level, settlement, spawnPos, null);
+            }
+        }
+
+        // 2. Guard Companion Dogs: 1 companion dog for every 4 guards
+        List<VillageGuardEntity> guards = level.getEntitiesOfClass(VillageGuardEntity.class, villageArea, g -> g.isAlive());
+        for (VillageGuardEntity guard : guards) {
+            if (guard.getCompanionDogUuid() == null && guardDogs < Math.max(1, guards.size() / 4)) {
+                forceSpawnDog(level, settlement, guard.blockPosition(), guard);
+                guardDogs++;
+                break;
+            }
+        }
     }
 
     public void clear() {

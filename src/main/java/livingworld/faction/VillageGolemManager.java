@@ -138,7 +138,7 @@ public class VillageGolemManager {
             for (int dz = -8; dz <= 8; dz++) {
                 for (int dy = -2; dy <= 4; dy++) {
                     BlockPos p = golemPos.offset(dx, dy, dz);
-                    if (!level.getBlockState(p).is(net.minecraft.world.level.block.Blocks.WATER) &&
+                    if (level.isLoaded(p) && !level.getBlockState(p).is(net.minecraft.world.level.block.Blocks.WATER) &&
                         !level.getBlockState(p.above()).is(net.minecraft.world.level.block.Blocks.WATER) &&
                         level.getBlockState(p.below()).isSolid()) {
                         double d = p.distSqr(golemPos);

@@ -459,3 +459,30 @@ Verification:
   - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
   - Built and deployed `livingworld-0.2.6.jar` (357,654 bytes) to `instances/LivingWorld/minecraft/mods/`.
 Revisit trigger: Additional multi-chunk procedural world structures requiring cross-chunk boundary generation.
+
+---
+
+## DEC-0020 — The Siege & Settlement Reliability Update Architecture
+Date: 2026-11-10T18:30:00Z
+Status: accepted
+Context: Hands-on creator playtesting of v0.2.6 identified 10 concrete gameplay defects (`DEF-01` through `DEF-10`): illagers wandering outside villages without reaching settlements, hanging raid boss bars caused by subterranean trapped raiders, complete lack of macro-level tactical objectives for illagers, absence of natural watchtowers, absence of natural cavalry mobilization, absence of natural village dogs and companion animals, incomplete/open residential and military blueprints (open roofs, missing doors), uncoordinated defender intelligence, and potential golem water navigation stalls.
+Options:
+  1. Patch individual entity goals with ad-hoc heuristics.
+  2. Implement an integrated Tactical Siege & Settlement Reliability Architecture:
+     - **Strategic Village Bell Objective Machine**: `RaidTactics.RaidObjective` registers the primary village bell as the macro-level assault objective. Implements 7-state tactical machine (`ASSEMBLE -> ADVANCE -> ENGAGE_DEFENDERS -> BREACH -> ATTACK_BELL -> SECURE_VILLAGE -> VICTORY`).
+     - **Physical Bell Attack & Recovery**: Melee raiders execute visible bell assault strikes with particle/sound feedback, destroying or silencing the bell upon 100 ticks. Surviving villagers rebuild lost bells using 5 stone or 1 iron from stockpiles.
+     - **160m Stuck Raider Navigation Diagnostics**: Tracks all raiders in 160m radius with 3-tiered resolution (200t subterranean surface recovery, 600t glowing effect + horn warning, 1200t failsafe resolution for hanging raids).
+     - **Guaranteed Dual Lookout Watchtowers**: `SettlementManager.tick()` enforces 2 perimeter watchtowers per village with solid ladder backing columns and elevated platform sentries.
+     - **Natural Military Cavalry & Companion Dogs**: `VillageGuardManager` automatically mobilizes mounted cavalry (swordsman, scout, captain) on armored horses when military capacity >= 3, and maintains 2-4 civilian dogs and 1 guard companion per 4 guards.
+     - **Architectural Integrity Overhaul**: Blueprints in `BlueprintRegistry` upgraded with solid roofs, valid doors (`addDoor`), firmly attached climbing ladders (`addLadder`), and authentic 2-block beds.
+     - **10 Diagnostic Commands**: Registered under `/livingworld debug raid|village|cavalry|military`.
+Decision: Option 2.
+Rationale: Replaces theoretical code systems with robust, observable gameplay loops. Illagers advance purposefully toward the settlement bell; trapped mobs are rescued or boundedly resolved; villages possess visible defensive watchtowers, patrolling cavalry, and companion dogs; and houses are fully enclosed architectural structures.
+Trade-offs: Mod JAR packaged at 380,764 bytes across 78 compiled classes.
+Verification:
+  - 88/88 automated acceptance tests passed (`scripts/test.ps1`).
+  - 8/8 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - 60-second in-world Survival quickplay executed on dedicated instance `instances/LivingWorld/` with 0 errors.
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+Revisit trigger: Siege weaponry, catapult mechanics, or multi-village alliances.
+

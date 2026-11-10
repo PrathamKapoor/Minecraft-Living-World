@@ -20,7 +20,30 @@ public class Settlement {
     private long lastStrategicUpdate = 0;
 
     private final Queue<ConstructionProject> constructionQueue = new LinkedList<>();
+    private final List<BlockPos> watchtowers = new ArrayList<>();
+    private final List<RegisteredBuilding> buildings = new ArrayList<>();
     private ConstructionProject activeProject = null;
+
+    public static class RegisteredBuilding {
+        private final String blueprintId;
+        private final BlockPos pos;
+        private boolean completed;
+        private int bedCount;
+
+        public RegisteredBuilding(String blueprintId, BlockPos pos, boolean completed, int bedCount) {
+            this.blueprintId = blueprintId;
+            this.pos = pos != null ? pos.immutable() : BlockPos.ZERO;
+            this.completed = completed;
+            this.bedCount = bedCount;
+        }
+
+        public String getBlueprintId() { return blueprintId; }
+        public BlockPos getPos() { return pos; }
+        public boolean isCompleted() { return completed; }
+        public void setCompleted(boolean completed) { this.completed = completed; }
+        public int getBedCount() { return bedCount; }
+        public void setBedCount(int bedCount) { this.bedCount = bedCount; }
+    }
 
     public Settlement(UUID id, String name, BlockPos center, int radius, FactionType factionType) {
         this.id = id;
@@ -118,6 +141,7 @@ public class Settlement {
 
     public void queueProject(ConstructionProject project) {
         constructionQueue.add(project);
+        addBuilding(project.getBlueprintId(), project.getOrigin(), false, 0);
     }
 
     public void strategicTick(ServerLevel level, long currentTicks) {
@@ -284,14 +308,12 @@ public class Settlement {
     }
 
     public void tacticalTick(ServerLevel level, int maxBlocksPerTick) {
-        // Progress active construction project
+        // Progress active construction project (prepaid upon queue registration)
         if (activeProject != null) {
-            if (livingworld.economy.EconomyManager.get().hasConstructionMaterials(this)) {
-                activeProject.step(level, maxBlocksPerTick);
-                if (activeProject.isComplete()) {
-                    onProjectFinished(activeProject);
-                    activeProject = null;
-                }
+            activeProject.step(level, maxBlocksPerTick);
+            if (activeProject.isComplete()) {
+                onProjectFinished(activeProject);
+                activeProject = null;
             }
         } else if (!constructionQueue.isEmpty()) {
             activeProject = constructionQueue.poll();
@@ -301,8 +323,8 @@ public class Settlement {
     private void onProjectFinished(ConstructionProject project) {
         String bpId = project.getBlueprintId();
         Blueprint bp = BlueprintRegistry.get(bpId);
+        int beds = bp != null ? bp.getBedCount() : 0;
         if (bp != null) {
-            int beds = bp.getBedCount();
             if (beds > 0) {
                 housingCapacity += beds * 2; // Each valid bed accommodates demographic expansion
             }
@@ -310,9 +332,36 @@ public class Settlement {
                 stockpile.add(Stockpile.ResourceType.FOOD, 25);
             } else if ("watchtower".equals(bpId) || "archer_watchtower".equals(bpId)) {
                 guardCount += 2;
+                addWatchtower(project.getOrigin());
             } else if ("armory".equals(bpId)) {
                 stockpile.add(Stockpile.ResourceType.IRON, 15);
             }
+        }
+        addBuilding(bpId, project.getOrigin(), true, beds);
+    }
+
+    public List<RegisteredBuilding> getBuildings() {
+        return Collections.unmodifiableList(buildings);
+    }
+
+    public void addBuilding(String blueprintId, BlockPos pos, boolean completed, int bedCount) {
+        for (RegisteredBuilding b : buildings) {
+            if (b.getPos().equals(pos) && b.getBlueprintId().equals(blueprintId)) {
+                b.setCompleted(completed);
+                b.setBedCount(bedCount);
+                return;
+            }
+        }
+        buildings.add(new RegisteredBuilding(blueprintId, pos, completed, bedCount));
+    }
+
+    public List<BlockPos> getWatchtowers() {
+        return Collections.unmodifiableList(watchtowers);
+    }
+
+    public void addWatchtower(BlockPos pos) {
+        if (pos != null && !watchtowers.contains(pos)) {
+            watchtowers.add(pos);
         }
     }
 
