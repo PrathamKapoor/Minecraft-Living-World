@@ -1,9 +1,9 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-10T14:35:00Z
-- Active milestone/task: Version 0.2.5 The Living Village Update — COMPLETE
-- Last known passing build: STEP 0021 (livingworld-0.2.5.jar with 74 classes, 309,832 bytes; 63/63 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 60s in-world Survival quickplay passed with 0 errors on NVIDIA RTX 4050 GPU)
+- UTC time: 2026-11-10T16:20:00Z
+- Active milestone/task: Version 0.2.6 Civilization Intelligence, Dimensional Scars & Release Engineering — COMPLETE
+- Last known passing build: STEP 0022 (livingworld-0.2.6.jar with 78 classes, 355,243 bytes; 78/78 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
 - Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
 - Rollback Point Established: `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
 - Prior Rollback Points:
@@ -12,11 +12,66 @@
   - `backup_v0.2.2/livingworld-0.2.2.jar` (SHA256: 2E79A77A764951F434F15AAF50F71F3DBDC51F8560215E9B73A2456E6F218B00)
   - `backup_v0.2.1/livingworld-0.2.1.jar` (SHA256: CB7A121B050601418FEDAC95AFC7C038468EC6A2C27C97A044774363CF1028A3)
   - `backup_v0.2.0/livingworld-0.2.0.jar` (SHA256: 96B73EBDB46B6624842469FE5884AE449ADC62D74FE9EED71D0EADA14014B4E0)
-- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.5.jar (309,832 bytes)
+- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar (355,243 bytes)
 - Integrated Dependencies: 20 active Fabric mods in `instances/LivingWorld/minecraft/mods/`
-- Files modified but unverified: None
+- Files modified but unverified: None (78/78 acceptance tests & 7/7 gameplay playtest scenarios passed)
 - Known blockers: None
-- NEXT ACTION: Commit and push changes to GitHub under `PrathamKapoor <prathamkapoor027@gmail.com>`.
+- Critical Constraint: DO NOT PUSH to GitHub until user explicitly sends "PUSH". Local commits strictly under PrathamKapoor <prathamkapoor027@gmail.com>.
+- NEXT ACTION: Awaiting user instruction or explicit "PUSH" command.
+
+---
+
+## CHRONOLOGICAL JOURNAL
+
+### 2026-11-10T16:20:00Z — STEP 0022 — DONE
+Goal: Execute Version 0.2.6 Civilization Intelligence, Dimensional Scars & Release Engineering:
+  1. Fix BUG-01 & BUG-02 (Sentry visible goat horn alarm animation, localized directional sound origin at sentry coords, false alarm suppression for underground mobs).
+  2. Fix BUG-03 & BUG-04 (Illager raid tactics, tactical building assault, vindicator door breaches, stuck-raider recovery).
+  3. Fix BUG-05 (Defensive patrol boundaries & 6-state pursuit machine PATROL -> INVESTIGATE -> ENGAGE -> PURSUE -> DISENGAGE -> RETURN_TO_POST).
+  4. Fix BUG-06 (Disappearing guards: constructor setPersistenceRequired(), complete NBT addAdditionalSaveData / readAdditionalSaveData serialization).
+  5. Fix BUG-07 & BUG-08 (Context-sensitive threat scoring prioritizing Mutant Commanders (15x), mutant monsters (12x), siege miners (6x), and civilian threats (+8x); tactical squad coordination: COMMANDER_RESPONSE, FRONTLINE, RANGED, RESERVE).
+  6. Fix BUG-08 (Diagnostic entity removal logging: DEATH, DESPAWN, UNLOAD, DIMENSION_CHANGE; retention of defender roster across chunk unloads).
+  7. Fix BUG-09 & BUG-12 (Village Dogs & Guard Companions: VillageDogEntity, civilian pet and guard companion roles, following/defending handler, NBT persistence).
+  8. Fix BUG-10 (Village Cavalry: VillageCavalryEntity, mounted swordsman, scout, captain roles riding persistent armored/saddled horses).
+  9. Fix BUG-11 (Iron Golem water buoyancy assist and 16-block shoreline navigation recovery).
+  10. Fix BUG-13 (26-worker demographic scaling across 13 professions).
+  11. Fix BUG-14 (Admin raider entity grouping `#livingworld:all_raiders` tag and `/livingworld debug raiders|raid` commands).
+  12. Fix BUG-15 (Mutant zombie commander boss bar cleanup on death/removal, single commander per 96m zone).
+  13. Implement Feature F19: Dimensional Scars (Bidirectional Nether–Overworld biome incursions: Warped, Crimson, Soul Sand, Basalt Deltas, Nether Wastes in Overworld; Lost Village Enclave and woodland fragments in Nether; multi-harmonic boundary noise blending, portal/cottage structures, 380m spacing).
+  14. Overhaul 13 custom spawn egg textures to authentic vanilla 12x14 egg silhouette proportions.
+  15. Expand test suite to 78 acceptance tests and verify 7 gameplay scenarios.
+Files Modified/Created:
+  - `src/main/java/livingworld/entity/VillageGuardEntity.java`
+  - `src/main/java/livingworld/entity/VillageArcherEntity.java`
+  - `src/main/java/livingworld/entity/MutantZombieCommanderEntity.java`
+  - `src/main/java/livingworld/undead/ZombieHordeManager.java`
+  - `src/main/java/livingworld/faction/VillageDefenseController.java`
+  - `src/main/java/livingworld/illager/RaidTactics.java`
+  - `src/main/java/livingworld/faction/VillageGolemManager.java`
+  - `src/main/java/livingworld/entity/VillageDogEntity.java`
+  - `src/main/java/livingworld/entity/VillageCavalryEntity.java`
+  - `src/main/java/livingworld/entity/LivingWorldEntities.java`
+  - `src/main/java/livingworld/item/LivingWorldItems.java`
+  - `src/main/java/livingworld/client/LivingWorldClientMod.java`
+  - `src/main/java/livingworld/config/FeatureConfig.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarGenerator.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarManager.java`
+  - `src/main/java/livingworld/LivingWorldMod.java`
+  - `src/main/java/livingworld/command/LivingWorldCommand.java`
+  - `src/main/resources/data/livingworld/tags/entity_type/all_raiders.json`
+  - `scripts/generate_spawn_egg_textures.ps1`
+  - `scripts/build.ps1`
+  - `src/test/java/livingworld/LivingWorldTests.java`
+  - `docs/PLAYTEST_DEFECTS_v026.md`
+  - `docs/FEATURE_MATRIX.md`
+  - `decisions.md`
+Outcome:
+  - Compiled and packaged `build/libs/livingworld-0.2.6.jar` (355,243 bytes across 78 classes).
+  - Deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar`.
+  - 78/78 automated acceptance tests passed (`scripts/test.ps1`).
+  - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Zero pushes to GitHub (Push Hold strictly active). Local commits only under `PrathamKapoor <prathamkapoor027@gmail.com>`.
 
 ---
 

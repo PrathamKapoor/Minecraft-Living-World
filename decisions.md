@@ -17,6 +17,8 @@
 - DEC-0014: Architectural Rebuild, Ground Surveying Foundations, Custom Spawn Egg Assets, Village Archers, and Zombie Combat Rebalance — ACCEPTED
 - DEC-0015: Mutant Monsters Mod Ecosystem Integration & Professional Visual Reference Pipeline — ACCEPTED
 - DEC-0016: Source-First Reengineering, Humanoid Guard Architecture, and Armor/Weapon Visual Pipeline — ACCEPTED
+- DEC-0017: The Living Village Update — Autonomous Civilizations, Organized Defense & Functional Professions — ACCEPTED
+- DEC-0018: Civilization Intelligence, Dimensional Scars & Release Engineering Architecture — ACCEPTED
 
 ---
 
@@ -377,3 +379,59 @@ Verification:
   - 60-second in-world Survival quickplay passed with 0 crashes, 0 errors, and stable 60 FPS on NVIDIA RTX 4050 GPU (`scripts/test_quickplay_world.ps1`).
   - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
 Revisit trigger: Multi-settlement trade caravans or imperial tributary alliances.
+
+---
+
+## DEC-0018 — Civilization Intelligence, Dimensional Scars & Release Engineering Architecture
+Date: 2026-11-10T16:15:00Z
+Status: accepted
+Context: Playtesting of v0.2.5 identified 16 consequential gameplay defects (`BUG-01` to `BUG-16`), including phantom sentry alarms triggered by subterranean mobs, lack of visible horn equipping during alerts, raider pathfinding stalls during village assaults, guards chasing lone mobs hundreds of blocks away and abandoning settlements, lack of entity persistence across chunk unloads and world reloads, poor threat prioritization against mutant bosses, absence of village cavalry and companion dogs, golem underwater trapping, bloated spawn egg silhouettes, and absence of bidirectional Nether–Overworld biome incursions (Feature F19).
+Options:
+  1. Patch individual symptoms with isolated workarounds.
+  2. Implement comprehensive, architectural improvements across AI goal sets, state machines, entity persistence, squad tactics, companion/cavalry entities, procedural noise-blended dimensional scars, and authentic asset styling.
+Decision: Option 2.
+Implemented:
+  1. **Sentry Threat Filtering & Horn Alarm Animation** (`VillageArcherEntity.java`):
+     - Added `SentryLookoutGoal` threat validation: rejects mobs > 6 blocks below tower floor or underground mobs lacking line-of-sight.
+     - Implemented `performHornAlarm()`: equips `Items.GOAT_HORN`, calls `startUsingItem`, plays localized audio at sentry coordinates, triggers alert, restores bow after 30 ticks.
+  2. **Raider Tactical Building Assault, Breaching & Stuck Recovery** (`RaidTactics.java`):
+     - Raiders assign squads to assault village sectors and structures; Vindicators breach wooden doors.
+     - Added `recoverStuckRaiders()` to reposition raiders trapped > 200 ticks toward village roads.
+     - Created `#livingworld:all_raiders` entity tag grouping vanilla raiders and custom illagers (`illager_swordsman`, `illager_shieldbearer`).
+  3. **Guard Leash State Machine & Boundary Tethering** (`VillageGuardEntity.java`):
+     - Implemented 6-state machine: `PATROL -> INVESTIGATE -> ENGAGE -> PURSUE -> DISENGAGE -> RETURN_TO_POST`.
+     - Enforced max leash distance (32m) and disengage threshold (48m).
+  4. **World-Reload Persistence & Full NBT Serialization** (`VillageGuardEntity.java`, `VillageArcherEntity.java`):
+     - Added `this.setPersistenceRequired()` to constructors.
+     - Implemented `addAdditionalSaveData()` and `readAdditionalSaveData()` saving `HomeSettlementId`, `PostX/Y/Z`, `GuardRank`, and `PatrolState`.
+  5. **Context-Sensitive Threat Scoring & Squad Coordination** (`VillageDefenseController.java`):
+     - Dynamic threat scoring prioritizing Mutant Commanders (15x), mutant monsters (12x), siege miners (6x), and civilian threats (+8x).
+     - Formed tactical squads: `COMMANDER_RESPONSE` (boss focus), `FRONTLINE` (melee line), `RANGED` (elevated suppression), `RESERVE` (reinforcements).
+  6. **Diagnostic Entity Removal & Unload Safety** (`VillageGuardEntity.java`, `AllegianceRegistry.java`):
+     - Overrode `remove(RemovalReason)` with diagnostic logging (`DEATH`, `DESPAWN`, `UNLOAD`, `DIMENSION_CHANGE`).
+     - Chunk unloads retain defender profile in allegiance registry; unregisters exclusively on death.
+  7. **Village Dogs & Guard Companions** (`VillageDogEntity.java`, `VillageGuardManager.java`):
+     - Wolf subclass with `CIVILIAN_PET` and `GUARD_COMPANION` roles.
+     - Guard dogs pair with guard handler, defend handler in combat, and persist across saves.
+  8. **Village Cavalry Mobile Defense** (`VillageCavalryEntity.java`):
+     - Mounted defenders (`MOUNTED_SWORDSMAN`, `MOUNTED_SCOUT`, `MOUNTED_CAPTAIN`) riding armored, saddled persistent horses.
+     - Fast perimeter response; dismounts and re-mounts intelligently.
+  9. **Iron Golem Water Buoyancy & Shoreline Navigation** (`VillageGolemManager.java`):
+     - Detects submerged village golems (> 2 blocks deep), applies vertical buoyant impulse (0.20), routes toward dry shoreline within 16 blocks.
+  10. **26-Worker Demographic Scaling Across 13 Professions** (`VillageWorkforceManager.java`):
+      - Balances 13 vanilla professions (Farmer, Fletcher, Armorer, Weaponsmith, Toolsmith, Cleric, Mason, Librarian, Fisherman, Butcher, Shepherd, Leatherworker, Cartographer) up to 26 workers.
+  11. **Single Mutant Commander Cap & Boss Bar Cleanup** (`MutantZombieCommanderEntity.java`, `ZombieHordeManager.java`):
+      - Enforces 1 commander per 96m zone; `bossEvent.removeAllPlayers()` invoked on death and removal.
+  12. **Feature F19 Dimensional Scars: Bidirectional Nether–Overworld Biome Incursions** (`DimensionalScarGenerator.java`, `DimensionalScarManager.java`):
+      - 5 Nether incursions in Overworld (Warped, Crimson, Soul Sand, Basalt Deltas, Nether Wastes) and 2 Overworld enclaves in Nether (Lost Village Enclave, Woodland Fragment).
+      - Multi-harmonic noise boundary blending across 80–180m diameters; central portal/cottage ruins; 380m spacing; respects player protection.
+  13. **Authentic 12x14 Egg Silhouette Proportions** (`scripts/generate_spawn_egg_textures.ps1`):
+      - Overhauled all 13 custom spawn egg textures to match vanilla 12x14 egg silhouette proportions.
+Rationale: Completely cures all 16 observed playtest defects, establishes disciplined civilization defense, delivers substantial environmental variety with Feature F19 Dimensional Scars, and maintains professional engineering quality.
+Trade-offs: Mod JAR packaged at 355,243 bytes across 78 compiled classes.
+Verification:
+  - 78/78 automated acceptance tests passed (`scripts/test.ps1`).
+  - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Deployed to Prism Launcher instance `instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar`.
+Revisit trigger: Cross-dimensional invasion events or planar rift stability mechanics.
