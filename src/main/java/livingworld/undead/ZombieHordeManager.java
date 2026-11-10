@@ -162,7 +162,14 @@ public class ZombieHordeManager {
 
         int totalSpawned = 0;
 
-        // 1. Leader: Mutant Zombie Commander (3 heads, 80 HP, boss bar)
+        // 1. Leader: Mutant Zombie Commander (3 heads, 180 HP, single active boss bar)
+        // Ensure no other active commander exists within 96 blocks (BUG-15 Dedup)
+        net.minecraft.world.phys.AABB commanderCheckArea = net.minecraft.world.phys.AABB.ofSize(new net.minecraft.world.phys.Vec3(origin.getX(), origin.getY(), origin.getZ()), 192, 48, 192);
+        List<MutantZombieCommanderEntity> existingCommanders = level.getEntitiesOfClass(MutantZombieCommanderEntity.class, commanderCheckArea, c -> c.isAlive());
+        if (!existingCommanders.isEmpty()) {
+            return; // Commander already active in this zone, prevent duplicate boss bars
+        }
+
         BlockPos leaderPos = positions.get(0);
         MutantZombieCommanderEntity commander = LivingWorldEntities.MUTANT_COMMANDER.create(level, EntitySpawnReason.EVENT);
         if (commander == null) {

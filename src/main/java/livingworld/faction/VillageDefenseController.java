@@ -152,63 +152,134 @@ public class VillageDefenseController {
     }
 
     /**
-     * Awakens sleeping guards, clears improper targets, and coordinates tactical defender rally.
+     * Calculates context-sensitive threat score (BUG-07):
+     * Evaluates enemy type, boss tier, siege capability, and proximity to civilians/village core.
+     */
+    public double calculateThreatScore(LivingEntity threat, BlockPos villageCenter, List<Villager> nearbyCivilians) {
+        if (threat == null || !threat.isAlive()) return 0.0;
+        double score = 1.0;
+
+        // 1. Enemy Type & Boss Tier
+        if (threat instanceof livingworld.entity.MutantZombieCommanderEntity) {
+            score += 15.0;
+        } else {
+            net.minecraft.resources.Identifier id = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(threat.getType());
+            if (id != null && "mutantmonsters".equals(id.getNamespace())) {
+                score += 12.0;
+            }
+        }
+
+        // 2. Siege Capability (Zombie miner with pickaxe)
+        if (threat.getMainHandItem().is(net.minecraft.world.item.Items.IRON_PICKAXE) || threat.getMainHandItem().is(net.minecraft.world.item.Items.DIAMOND_PICKAXE)) {
+            score += 6.0;
+        }
+
+        // 3. Proximity to civilians
+        double closestCivilianDist = Double.MAX_VALUE;
+        for (Villager v : nearbyCivilians) {
+            double d = v.distanceToSqr(threat);
+            if (d < closestCivilianDist) closestCivilianDist = d;
+        }
+        if (closestCivilianDist < 64.0) { // within 8 blocks of a villager
+            score += 8.0;
+        } else if (closestCivilianDist < 256.0) { // within 16 blocks
+            score += 4.0;
+        }
+
+        // 4. Distance to village center
+        double distToCenter = Math.sqrt(threat.distanceToSqr(villageCenter.getX(), villageCenter.getY(), villageCenter.getZ()));
+        if (distToCenter < 24.0) {
+            score += 5.0;
+        } else if (distToCenter < 48.0) {
+            score += 2.0;
+        }
+
+        // 5. Active attacking
+        if (threat instanceof Monster m && m.getTarget() != null) {
+            score += 3.0;
+        }
+
+        return score;
+    }
+
+    /**
+     * Awakens sleeping guards, clears improper targets, and coordinates tactical squad defense (BUG-07 & BUG-08).
+     * Distributes defenders into Commander Response, Frontline, Ranged, and Reserve squads.
      */
     private void rallyDefenders(ServerLevel level, Settlement settlement, BlockPos threatPos, LivingEntity threatEntity) {
         BlockPos center = settlement.getCenter();
         AABB defenseZone = AABB.ofSize(new Vec3(center.getX(), center.getY(), center.getZ()),
             settlement.getRadius() * 2.5, 32, settlement.getRadius() * 2.5);
 
-        // 1. Melee Guards
+        List<Villager> civilians = level.getEntitiesOfClass(Villager.class, defenseZone, v -> v.isAlive());
+        List<Monster> hostiles = level.getEntitiesOfClass(Monster.class, defenseZone,
+            m -> m.isAlive() && !AllegianceRegistry.get().isVillageDefender(m));
+
+        // Sort hostiles by threat score descending
+        hostiles.sort((a, b) -> Double.compare(
+            calculateThreatScore(b, center, civilians),
+            calculateThreatScore(a, center, civilians)
+        ));
+
+        LivingEntity primaryThreat = !hostiles.isEmpty() ? hostiles.get(0) : threatEntity;
+        boolean hasBossThreat = primaryThreat != null && calculateThreatScore(primaryThreat, center, civilians) >= 10.0;
+
+        // 1. Melee Guards (Squad assignments: Commander Response vs Frontline)
         List<VillageGuardEntity> guards = level.getEntitiesOfClass(VillageGuardEntity.class, defenseZone, g -> g.isAlive());
-        for (VillageGuardEntity guard : guards) {
-            // Wake up if sleeping/resting
+        for (int i = 0; i < guards.size(); i++) {
+            VillageGuardEntity guard = guards.get(i);
             if (guard.isSleeping()) {
                 guard.stopSleeping();
             }
             AllegianceRegistry.get().sanitizeDefenderTarget(guard);
 
-            // Assign threat target if available, or rally toward threat pos
-            if (threatEntity != null && !AllegianceRegistry.get().areAllies(guard, threatEntity)) {
-                guard.setTarget(threatEntity);
+            if (hasBossThreat && i < 2) {
+                // Commander Response Squad: 2 strongest guards focus primary boss threat
+                guard.setTarget(primaryThreat);
+            } else if (!hostiles.isEmpty()) {
+                // Frontline Squad: distribute across advancing hostiles
+                Monster target = hostiles.get(i % hostiles.size());
+                guard.setTarget(target);
             } else if (guard.getTarget() == null || !guard.getTarget().isAlive()) {
                 guard.getNavigation().moveTo(threatPos.getX(), threatPos.getY(), threatPos.getZ(), 1.35);
             }
         }
 
-        // 2. Archers & Sentries
+        // 2. Archers & Sentries (Ranged Standoff & Fire Support)
         List<VillageArcherEntity> archers = level.getEntitiesOfClass(VillageArcherEntity.class, defenseZone, a -> a.isAlive());
-        for (VillageArcherEntity archer : archers) {
+        for (int i = 0; i < archers.size(); i++) {
+            VillageArcherEntity archer = archers.get(i);
             if (archer.isSleeping()) {
                 archer.stopSleeping();
             }
             AllegianceRegistry.get().sanitizeDefenderTarget(archer);
 
-            if (threatEntity != null && !AllegianceRegistry.get().areAllies(archer, threatEntity)) {
-                archer.setTarget(threatEntity);
+            if (!hostiles.isEmpty()) {
+                // Archers target secondary flanking hostiles or boss from range
+                Monster target = hostiles.get((i + 1) % hostiles.size());
+                archer.setTarget(target);
             } else if (archer.getTarget() == null || !archer.getTarget().isAlive()) {
-                // Seek elevated position or move toward threat perimeter
                 archer.getNavigation().moveTo(threatPos.getX(), threatPos.getY(), threatPos.getZ(), 1.15);
             }
         }
 
-        // 3. Iron Golems
+        // 3. Iron Golems (Heavy Shock Assault)
         List<IronGolem> golems = level.getEntitiesOfClass(IronGolem.class, defenseZone, g -> g.isAlive());
         for (IronGolem golem : golems) {
             AllegianceRegistry.get().sanitizeDefenderTarget(golem);
-            if (threatEntity != null && !AllegianceRegistry.get().areAllies(golem, threatEntity)) {
-                golem.setTarget(threatEntity);
+            if (primaryThreat != null && !AllegianceRegistry.get().areAllies(golem, primaryThreat)) {
+                golem.setTarget(primaryThreat); // Golems engage high-tier commander
             } else if (golem.getTarget() == null || !golem.getTarget().isAlive()) {
                 golem.getNavigation().moveTo(threatPos.getX(), threatPos.getY(), threatPos.getZ(), 1.25);
             }
         }
 
-        // 4. Snow Golems (Cold Biomes)
+        // 4. Snow Golems (Cold Biome Harassment)
         List<SnowGolem> snowGolems = level.getEntitiesOfClass(SnowGolem.class, defenseZone, s -> s.isAlive());
         for (SnowGolem snowGolem : snowGolems) {
             AllegianceRegistry.get().sanitizeDefenderTarget(snowGolem);
-            if (threatEntity != null && !AllegianceRegistry.get().areAllies(snowGolem, threatEntity)) {
-                snowGolem.setTarget(threatEntity);
+            if (!hostiles.isEmpty()) {
+                snowGolem.setTarget(hostiles.get(0));
             }
         }
     }

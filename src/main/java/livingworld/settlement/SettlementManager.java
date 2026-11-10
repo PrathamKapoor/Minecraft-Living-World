@@ -32,6 +32,20 @@ public class SettlementManager {
         return settlements.get(id);
     }
 
+    public Settlement getSettlement(String id) {
+        if (id == null || id.isEmpty()) return null;
+        try {
+            return settlements.get(UUID.fromString(id));
+        } catch (Exception e) {
+            for (Settlement s : settlements.values()) {
+                if (id.equals(s.getName()) || id.equals(s.getId().toString())) {
+                    return s;
+                }
+            }
+            return null;
+        }
+    }
+
     public Collection<Settlement> getAllSettlements() {
         return settlements.values();
     }

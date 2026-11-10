@@ -12,6 +12,7 @@ import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -109,6 +110,7 @@ public class MutantZombieCommanderEntity extends Monster {
     @Override
     public void die(DamageSource damageSource) {
         super.die(damageSource);
+        this.bossEvent.removeAllPlayers(); // Clear boss bar on death (BUG-15)
 
         if (this.level() instanceof ServerLevel serverLevel) {
             // Disperse and panic all follower zombies in a 24-block radius
@@ -126,6 +128,12 @@ public class MutantZombieCommanderEntity extends Monster {
 
             serverLevel.sendParticles(ParticleTypes.SOUL, this.getX(), this.getY() + 1.0, this.getZ(), 30, 0.8, 0.8, 0.8, 0.1);
         }
+    }
+
+    @Override
+    public void remove(Entity.RemovalReason reason) {
+        super.remove(reason);
+        this.bossEvent.removeAllPlayers(); // Clear boss bar on unload or removal (BUG-15)
     }
 
     @Override
