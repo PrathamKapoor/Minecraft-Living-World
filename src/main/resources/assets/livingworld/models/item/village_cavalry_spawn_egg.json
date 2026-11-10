@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/village_cavalry_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}

@@ -318,6 +318,52 @@ public class VillageGuardManager {
         return false;
     }
 
+    public boolean forceRecruitCavalry(ServerLevel level, Settlement settlement, BlockPos pos, livingworld.entity.VillageCavalryEntity.CavalryRole role) {
+        if (level == null || pos == null) return false;
+        String settlementId = settlement != null ? settlement.getId().toString() : UUID.randomUUID().toString();
+
+        livingworld.entity.VillageCavalryEntity cavalry = LivingWorldEntities.VILLAGE_CAVALRY.create(level, EntitySpawnReason.COMMAND);
+        if (cavalry != null) {
+            cavalry.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+            cavalry.setHomeSettlementId(settlementId);
+            cavalry.setCavalryRole(role != null ? role : livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN);
+            cavalry.setCustomNameVisible(true);
+            AllegianceRegistry.get().register(cavalry.getUUID(), settlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.MELEE_GUARD);
+
+            level.addFreshEntity(cavalry);
+            cavalry.spawnAndMountHorse(level);
+
+            level.playSound(null, pos, SoundEvents.HORSE_ARMOR.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
+            level.sendParticles(ParticleTypes.ENCHANTED_HIT, pos.getX() + 0.5, pos.getY() + 1.2, pos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
+            if (settlement != null) settlement.setGuardCount(settlement.getGuardCount() + 1);
+            livingworld.LivingWorldMod.LOGGER.info("[Living World] Cavalry Enlistment: Mounted unit mobilized in " + (settlement != null ? settlement.getName() : "Wilderness"));
+            return true;
+        }
+        return false;
+    }
+
+    public boolean forceSpawnDog(ServerLevel level, Settlement settlement, BlockPos pos, livingworld.entity.VillageGuardEntity handler) {
+        if (level == null || pos == null) return false;
+        String settlementId = settlement != null ? settlement.getId().toString() : UUID.randomUUID().toString();
+
+        livingworld.entity.VillageDogEntity dog = LivingWorldEntities.VILLAGE_DOG.create(level, EntitySpawnReason.COMMAND);
+        if (dog != null) {
+            dog.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+            dog.setHomeSettlementId(settlementId);
+            if (handler != null) {
+                dog.pairWithGuard(handler);
+                handler.setCompanionDogUuid(dog.getUUID());
+            } else {
+                dog.setRole(livingworld.entity.VillageDogEntity.DogRole.CIVILIAN_PET);
+            }
+            level.addFreshEntity(dog);
+            level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_WOLF.value(), SoundSource.NEUTRAL, 1.0f, 1.1f);
+            level.sendParticles(ParticleTypes.HEART, pos.getX() + 0.5, pos.getY() + 0.8, pos.getZ() + 0.5, 6, 0.3, 0.3, 0.3, 0.05);
+            return true;
+        }
+        return false;
+    }
+
     public void clear() {
         guardRecords.clear();
     }

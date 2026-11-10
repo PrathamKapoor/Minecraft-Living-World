@@ -65,6 +65,12 @@ public class LivingWorldEntities {
     public static final EntityType<VillageArcherEntity> VILLAGE_ARCHER = register("village_archer",
         EntityType.Builder.of(VillageArcherEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f));
 
+    public static final EntityType<VillageDogEntity> VILLAGE_DOG = register("village_dog",
+        EntityType.Builder.of(VillageDogEntity::new, MobCategory.CREATURE).sized(0.6f, 0.85f));
+
+    public static final EntityType<VillageCavalryEntity> VILLAGE_CAVALRY = register("village_cavalry",
+        EntityType.Builder.of(VillageCavalryEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f));
+
     private static <T extends net.minecraft.world.entity.Entity> EntityType<T> register(String name, EntityType.Builder<T> builder) {
         Identifier id = Identifier.fromNamespaceAndPath("livingworld", name);
         ResourceKey<EntityType<?>> key = ResourceKey.create(Registries.ENTITY_TYPE, id);
@@ -85,5 +91,7 @@ public class LivingWorldEntities {
         FabricDefaultAttributeRegistry.register(ILLAGER_SHIELDBEARER, IllagerShieldbearerEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(VILLAGE_GUARD, VillageGuardEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(VILLAGE_ARCHER, VillageArcherEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(VILLAGE_DOG, VillageDogEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(VILLAGE_CAVALRY, VillageCavalryEntity.createAttributes());
     }
 }

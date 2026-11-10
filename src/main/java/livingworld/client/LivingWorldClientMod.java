@@ -22,5 +22,7 @@ public class LivingWorldClientMod implements ClientModInitializer {
         EntityRendererRegistry.register(LivingWorldEntities.ILLAGER_SHIELDBEARER, IllagerShieldbearerRenderer::new);
         EntityRendererRegistry.register(LivingWorldEntities.VILLAGE_GUARD, VillageGuardRenderer::new);
         EntityRendererRegistry.register(LivingWorldEntities.VILLAGE_ARCHER, VillageArcherRenderer::new);
+        EntityRendererRegistry.register(LivingWorldEntities.VILLAGE_DOG, net.minecraft.client.renderer.entity.WolfRenderer::new);
+        EntityRendererRegistry.register(LivingWorldEntities.VILLAGE_CAVALRY, VillageGuardRenderer::new);
     }
 }

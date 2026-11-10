@@ -49,6 +49,8 @@ public class LivingWorldItems {
     public static final Item ILLAGER_SHIELDBEARER_SPAWN_EGG = registerSpawnEgg("illager_shieldbearer_spawn_egg", LivingWorldEntities.ILLAGER_SHIELDBEARER);
     public static final Item VILLAGE_GUARD_SPAWN_EGG = registerSpawnEgg("village_guard_spawn_egg", LivingWorldEntities.VILLAGE_GUARD);
     public static final Item VILLAGE_ARCHER_SPAWN_EGG = registerSpawnEgg("village_archer_spawn_egg", LivingWorldEntities.VILLAGE_ARCHER);
+    public static final Item VILLAGE_DOG_SPAWN_EGG = registerSpawnEgg("village_dog_spawn_egg", LivingWorldEntities.VILLAGE_DOG);
+    public static final Item VILLAGE_CAVALRY_SPAWN_EGG = registerSpawnEgg("village_cavalry_spawn_egg", LivingWorldEntities.VILLAGE_CAVALRY);
 
     private static Item registerSpawnEgg(String name, EntityType<? extends Mob> entityType) {
         Identifier id = Identifier.fromNamespaceAndPath("livingworld", name);

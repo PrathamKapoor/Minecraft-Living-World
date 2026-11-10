@@ -1,0 +1,6 @@
+{
+    "model":  {
+                  "model":  "livingworld:item/village_dog_spawn_egg",
+                  "type":  "minecraft:model"
+              }
+}
