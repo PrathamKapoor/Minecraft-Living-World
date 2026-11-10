@@ -269,6 +269,7 @@ public class LivingWorldMod implements ModInitializer {
             }
             SettlementManager.get().clear();
             ProtectionManager.get().clear();
+            livingworld.worldgen.DimensionalScarManager.get().clear();
         });
 
         // 10. Server Tick Scheduler: Two-Scale Simulation (Strategic & Tactical across Dimensions)
@@ -293,6 +294,7 @@ public class LivingWorldMod implements ModInitializer {
                     MinecartSpeedManager.get().tickMinecartBoosts(serverLevel);
                     SwiftMountTraversalManager.get().tickTraversal(serverLevel);
                     RaidTactics.get().tickRaidTactics(serverLevel);
+                    livingworld.worldgen.DimensionalScarManager.get().tick(serverLevel);
 
                     // Track player exploration, emergency support, visitor greetings & mineshaft cues
                     for (ServerPlayer player : serverLevel.players()) {
@@ -310,6 +312,7 @@ public class LivingWorldMod implements ModInitializer {
                     PiglinTribeManager.get().tickTribalSkirmishes(serverLevel);
                     NetherBehemothBoss.tickAll(serverLevel);
                     MinecartSpeedManager.get().tickMinecartBoosts(serverLevel);
+                    livingworld.worldgen.DimensionalScarManager.get().tick(serverLevel);
                 } else if (serverLevel.dimension() == Level.END) {
                     DragonPhaseController.get().tickDragonPhases(serverLevel);
                 }

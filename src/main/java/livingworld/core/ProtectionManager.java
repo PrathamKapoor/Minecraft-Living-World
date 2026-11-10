@@ -70,7 +70,7 @@ public class ProtectionManager {
             return true;
         }
 
-        if (level == null) {
+        if (level == null || !level.isLoaded(pos)) {
             return false;
         }
 

@@ -7,6 +7,7 @@ import livingworld.settlement.SettlementManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * - Nether Overworld Enclaves: Lost Village Enclave, Woodland Fragment
  * - Noise-based irregular boundary blending, thematic surface replacement, vegetation, and portal ruins
  * - Protected world invariant: respects player claims and pre-existing villages
+ * - Chunk-bounded slicing: world alterations execute strictly within loaded chunk bounds to prevent deadlocks
  */
 public class DimensionalScarGenerator {
 
@@ -49,7 +51,8 @@ public class DimensionalScarGenerator {
     }
 
     /**
-     * Generates a complete dimensional scar at the specified coordinates.
+     * Generates a complete dimensional scar at the specified coordinates by registering
+     * the scar record and triggering generation across all currently loaded chunks within radius.
      */
     public static boolean generateScar(ServerLevel level, BlockPos center, ScarType type, int radius) {
         if (level == null || center == null) return false;
@@ -62,13 +65,43 @@ public class DimensionalScarGenerator {
             return false;
         }
 
-        Random random = new Random(level.getSeed() ^ center.asLong());
+        DimensionalScarManager.ScarRecord record = new DimensionalScarManager.ScarRecord(
+            java.util.UUID.randomUUID(), type, center, radius, level.dimension().identifier().toString()
+        );
+        DimensionalScarManager.get().registerScar(record);
+        DimensionalScarManager.get().triggerScarGeneration(level, record);
+
+        livingworld.LivingWorldMod.LOGGER.info(String.format("[Living World] Dimensional Scar registered & triggered: %s at (%d, %d, %d) with radius %d",
+            type.getTitle(), center.getX(), center.getY(), center.getZ(), radius));
+        return true;
+    }
+
+    /**
+     * Chunk-bounded scar generation slice.
+     * Alters surface blocks strictly within the specified chunkPos bounds to avoid cascading chunk loads.
+     */
+    public static int generateScarChunk(ServerLevel level, ChunkPos chunkPos, DimensionalScarManager.ScarRecord scar) {
+        if (level == null || chunkPos == null || scar == null) return 0;
+        BlockPos samplePos = new BlockPos(chunkPos.x() << 4, 64, chunkPos.z() << 4);
+        if (!level.isLoaded(samplePos)) return 0;
+
+        int minX = chunkPos.x() << 4;
+        int maxX = minX + 15;
+        int minZ = chunkPos.z() << 4;
+        int maxZ = minZ + 15;
+
+        BlockPos center = scar.getCenter();
+        int radius = scar.getRadius();
+        ScarType type = scar.getType();
+
         int blocksPlaced = 0;
 
-        // 1. Terrain Surface Replacement with Noise-Displaced Boundary
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                double dist = Math.sqrt(dx * dx + dz * dz);
+        // 1. Terrain Surface Replacement with Noise-Displaced Boundary for this chunk's columns
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                int dx = x - center.getX();
+                int dz = z - center.getZ();
+                double dist = Math.sqrt((double) dx * dx + (double) dz * dz);
                 double angle = Math.atan2(dz, dx);
 
                 // Multi-frequency harmonic boundary distortion (creates natural organic fracture edges)
@@ -77,62 +110,84 @@ public class DimensionalScarGenerator {
 
                 if (dist > effectiveRadius) continue;
 
-                BlockPos colPos = center.offset(dx, 0, dz);
-                // Sample terrain surface
+                BlockPos colPos = new BlockPos(x, center.getY(), z);
+                if (!level.isLoaded(colPos)) continue;
+
+                // Sample terrain surface safely
                 BlockPos surfacePos = type.isOverworldTarget()
                     ? level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, colPos)
                     : findNetherSurface(level, colPos);
 
                 if (surfacePos == null || surfacePos.getY() <= level.getMinY() + 5) continue;
+                if (!level.isLoaded(surfacePos)) continue;
 
                 // Safety: never overwrite player-protected blocks
                 if (ProtectionManager.get().isProtectedBlock(level, surfacePos)) continue;
 
                 // Probability of replacement decreases near boundary for smooth transition
+                Random colRandom = new Random(level.getSeed() ^ colPos.asLong());
                 double edgeFactor = dist / effectiveRadius;
-                if (edgeFactor > 0.75 && random.nextDouble() < (edgeFactor - 0.75) * 4.0) {
+                if (edgeFactor > 0.75 && colRandom.nextDouble() < (edgeFactor - 0.75) * 4.0) {
                     continue; // Natural gradient blend
                 }
 
-                replaceSurfaceColumn(level, surfacePos.below(), type, random);
+                replaceSurfaceColumn(level, surfacePos.below(), type, colRandom);
                 blocksPlaced++;
 
                 // Thematic Vegetation & Features (1 in 14 blocks)
-                if (random.nextInt(14) == 0 && dist < effectiveRadius * 0.75) {
-                    placeThematicFeature(level, surfacePos, type, random);
+                if (colRandom.nextInt(14) == 0 && dist < effectiveRadius * 0.75) {
+                    placeThematicFeature(level, surfacePos, type, colRandom);
                 }
             }
         }
 
         // 2. Central Monumental Ruin (Ruined Gateway Portal or Lost Village Cottage)
-        if (type.isOverworldTarget()) {
-            generateRuinedNetherGateway(level, center);
-        } else {
-            generateAbandonedOverworldCottage(level, center);
+        // Generated strictly when the center coordinates reside within this chunk
+        int centerChunkX = center.getX() >> 4;
+        int centerChunkZ = center.getZ() >> 4;
+        if (chunkPos.x() == centerChunkX && chunkPos.z() == centerChunkZ) {
+            if (level.isLoaded(center)) {
+                if (type.isOverworldTarget()) {
+                    generateRuinedNetherGateway(level, center);
+                } else {
+                    generateAbandonedOverworldCottage(level, center);
+                }
+            }
         }
 
-        DimensionalScarManager.get().registerScar(new DimensionalScarManager.ScarRecord(
-            java.util.UUID.randomUUID(), type, center, radius, level.dimension().identifier().toString()
-        ));
+        return blocksPlaced;
+    }
 
-        livingworld.LivingWorldMod.LOGGER.info(String.format("[Living World] Dimensional Scar generated: %s at (%d, %d, %d) with radius %d (Blocks altered: %d)",
-            type.getTitle(), center.getX(), center.getY(), center.getZ(), radius, blocksPlaced));
-        return true;
+    private static void setBlockSafe(ServerLevel level, BlockPos pos, BlockState state) {
+        if (level != null && pos != null && level.isLoaded(pos)) {
+            level.setBlock(pos, state, 3);
+        }
+    }
+
+    private static boolean isAirSafe(ServerLevel level, BlockPos pos) {
+        return level != null && pos != null && level.isLoaded(pos) && level.getBlockState(pos).isAir();
     }
 
     private static BlockPos findNetherSurface(ServerLevel level, BlockPos pos) {
-        // In the Nether, scan down from y=80 for solid floor
+        if (level == null || pos == null || !level.isLoaded(pos)) return null;
+        // In the Nether, scan down from y=90 for solid floor
         for (int y = 90; y >= 32; y--) {
             BlockPos p = new BlockPos(pos.getX(), y, pos.getZ());
+            if (!level.isLoaded(p)) return null;
             BlockState state = level.getBlockState(p);
-            if (!state.isAir() && state.isSolid() && level.getBlockState(p.above()).isAir()) {
-                return p.above();
+            if (!state.isAir() && state.isSolid()) {
+                BlockPos above = p.above();
+                if (level.isLoaded(above) && level.getBlockState(above).isAir()) {
+                    return above;
+                }
             }
         }
         return null;
     }
 
     private static void replaceSurfaceColumn(ServerLevel level, BlockPos surfaceBlock, ScarType type, Random random) {
+        if (level == null || surfaceBlock == null || !level.isLoaded(surfaceBlock)) return;
+
         BlockState topState;
         BlockState subState;
 
@@ -168,33 +223,33 @@ public class DimensionalScarGenerator {
             }
         }
 
-        level.setBlock(surfaceBlock, topState, 3);
-        level.setBlock(surfaceBlock.below(), subState, 3);
+        setBlockSafe(level, surfaceBlock, topState);
+        setBlockSafe(level, surfaceBlock.below(), subState);
         if (random.nextBoolean()) {
-            level.setBlock(surfaceBlock.below(2), subState, 3);
+            setBlockSafe(level, surfaceBlock.below(2), subState);
         }
     }
 
     private static void placeThematicFeature(ServerLevel level, BlockPos pos, ScarType type, Random random) {
-        if (!level.getBlockState(pos).isAir()) return;
+        if (!isAirSafe(level, pos)) return;
 
         switch (type) {
             case WARPED_FOREST -> {
                 int roll = random.nextInt(6);
-                if (roll == 0) level.setBlock(pos, Blocks.WARPED_FUNGUS.defaultBlockState(), 3);
-                else if (roll == 1) level.setBlock(pos, Blocks.WARPED_ROOTS.defaultBlockState(), 3);
-                else if (roll == 2) level.setBlock(pos, Blocks.NETHER_SPROUTS.defaultBlockState(), 3);
+                if (roll == 0) setBlockSafe(level, pos, Blocks.WARPED_FUNGUS.defaultBlockState());
+                else if (roll == 1) setBlockSafe(level, pos, Blocks.WARPED_ROOTS.defaultBlockState());
+                else if (roll == 2) setBlockSafe(level, pos, Blocks.NETHER_SPROUTS.defaultBlockState());
                 else if (roll == 3) generateWarpedFungusTree(level, pos, random);
             }
             case CRIMSON_FOREST -> {
                 int roll = random.nextInt(5);
-                if (roll == 0) level.setBlock(pos, Blocks.CRIMSON_FUNGUS.defaultBlockState(), 3);
-                else if (roll == 1) level.setBlock(pos, Blocks.CRIMSON_ROOTS.defaultBlockState(), 3);
+                if (roll == 0) setBlockSafe(level, pos, Blocks.CRIMSON_FUNGUS.defaultBlockState());
+                else if (roll == 1) setBlockSafe(level, pos, Blocks.CRIMSON_ROOTS.defaultBlockState());
                 else if (roll == 2) generateCrimsonFungusTree(level, pos, random);
             }
             case SOUL_SAND_VALLEY -> {
                 if (random.nextInt(3) == 0) {
-                    level.setBlock(pos, Blocks.SOUL_FIRE.defaultBlockState(), 3);
+                    setBlockSafe(level, pos, Blocks.SOUL_FIRE.defaultBlockState());
                 } else if (random.nextInt(4) == 0) {
                     generateFossilArch(level, pos, random);
                 }
@@ -202,12 +257,12 @@ public class DimensionalScarGenerator {
             case BASALT_DELTAS -> {
                 int height = 2 + random.nextInt(4);
                 for (int y = 0; y < height; y++) {
-                    level.setBlock(pos.above(y), Blocks.BASALT.defaultBlockState(), 3);
+                    setBlockSafe(level, pos.above(y), Blocks.BASALT.defaultBlockState());
                 }
             }
             case NETHER_WASTES -> {
                 if (random.nextInt(4) == 0) {
-                    level.setBlock(pos, Blocks.FIRE.defaultBlockState(), 3);
+                    setBlockSafe(level, pos, Blocks.FIRE.defaultBlockState());
                 }
             }
             case LOST_VILLAGE_ENCLAVE, OVERWORLD_WOODLAND -> {
@@ -215,7 +270,7 @@ public class DimensionalScarGenerator {
                 if (random.nextInt(3) == 0) {
                     generateSmallOakTree(level, pos, random);
                 } else {
-                    level.setBlock(pos, Blocks.SHORT_GRASS.defaultBlockState(), 3);
+                    setBlockSafe(level, pos, Blocks.SHORT_GRASS.defaultBlockState());
                 }
             }
         }
@@ -224,7 +279,7 @@ public class DimensionalScarGenerator {
     private static void generateWarpedFungusTree(ServerLevel level, BlockPos base, Random random) {
         int height = 4 + random.nextInt(4);
         for (int y = 0; y < height; y++) {
-            level.setBlock(base.above(y), Blocks.WARPED_STEM.defaultBlockState(), 3);
+            setBlockSafe(level, base.above(y), Blocks.WARPED_STEM.defaultBlockState());
         }
         BlockPos capCenter = base.above(height);
         for (int dx = -2; dx <= 2; dx++) {
@@ -232,8 +287,8 @@ public class DimensionalScarGenerator {
                 for (int dy = -1; dy <= 1; dy++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
                     BlockPos p = capCenter.offset(dx, dy, dz);
-                    if (level.getBlockState(p).isAir()) {
-                        level.setBlock(p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.WARPED_WART_BLOCK).defaultBlockState(), 3);
+                    if (isAirSafe(level, p)) {
+                        setBlockSafe(level, p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.WARPED_WART_BLOCK).defaultBlockState());
                     }
                 }
             }
@@ -243,7 +298,7 @@ public class DimensionalScarGenerator {
     private static void generateCrimsonFungusTree(ServerLevel level, BlockPos base, Random random) {
         int height = 4 + random.nextInt(4);
         for (int y = 0; y < height; y++) {
-            level.setBlock(base.above(y), Blocks.CRIMSON_STEM.defaultBlockState(), 3);
+            setBlockSafe(level, base.above(y), Blocks.CRIMSON_STEM.defaultBlockState());
         }
         BlockPos capCenter = base.above(height);
         for (int dx = -2; dx <= 2; dx++) {
@@ -251,8 +306,8 @@ public class DimensionalScarGenerator {
                 for (int dy = -1; dy <= 1; dy++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
                     BlockPos p = capCenter.offset(dx, dy, dz);
-                    if (level.getBlockState(p).isAir()) {
-                        level.setBlock(p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.NETHER_WART_BLOCK).defaultBlockState(), 3);
+                    if (isAirSafe(level, p)) {
+                        setBlockSafe(level, p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.NETHER_WART_BLOCK).defaultBlockState());
                     }
                 }
             }
@@ -262,17 +317,17 @@ public class DimensionalScarGenerator {
     private static void generateFossilArch(ServerLevel level, BlockPos base, Random random) {
         int height = 3 + random.nextInt(3);
         for (int y = 0; y < height; y++) {
-            level.setBlock(base.above(y), Blocks.BONE_BLOCK.defaultBlockState(), 3);
-            level.setBlock(base.offset(3, y, 0), Blocks.BONE_BLOCK.defaultBlockState(), 3);
+            setBlockSafe(level, base.above(y), Blocks.BONE_BLOCK.defaultBlockState());
+            setBlockSafe(level, base.offset(3, y, 0), Blocks.BONE_BLOCK.defaultBlockState());
         }
-        level.setBlock(base.offset(1, height, 0), Blocks.BONE_BLOCK.defaultBlockState(), 3);
-        level.setBlock(base.offset(2, height, 0), Blocks.BONE_BLOCK.defaultBlockState(), 3);
+        setBlockSafe(level, base.offset(1, height, 0), Blocks.BONE_BLOCK.defaultBlockState());
+        setBlockSafe(level, base.offset(2, height, 0), Blocks.BONE_BLOCK.defaultBlockState());
     }
 
     private static void generateSmallOakTree(ServerLevel level, BlockPos base, Random random) {
         int trunkHeight = 4 + random.nextInt(2);
         for (int y = 0; y < trunkHeight; y++) {
-            level.setBlock(base.above(y), Blocks.OAK_LOG.defaultBlockState(), 3);
+            setBlockSafe(level, base.above(y), Blocks.OAK_LOG.defaultBlockState());
         }
         BlockPos leafCenter = base.above(trunkHeight);
         for (int dx = -2; dx <= 2; dx++) {
@@ -280,8 +335,8 @@ public class DimensionalScarGenerator {
                 for (int dy = -1; dy <= 1; dy++) {
                     if (Math.abs(dx) == 2 && Math.abs(dz) == 2 && dy == 1) continue;
                     BlockPos p = leafCenter.offset(dx, dy, dz);
-                    if (level.getBlockState(p).isAir()) {
-                        level.setBlock(p, Blocks.OAK_LEAVES.defaultBlockState(), 3);
+                    if (isAirSafe(level, p)) {
+                        setBlockSafe(level, p, Blocks.OAK_LEAVES.defaultBlockState());
                     }
                 }
             }
@@ -292,52 +347,56 @@ public class DimensionalScarGenerator {
      * Generates a massive ruined dimensional gateway at the center of the Overworld scar.
      */
     private static void generateRuinedNetherGateway(ServerLevel level, BlockPos center) {
+        if (level == null || center == null || !level.isLoaded(center)) return;
         BlockPos ground = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, center);
+        if (ground == null || !level.isLoaded(ground)) return;
 
         // Obsidian Portal Remnant (4x5 frame with crying obsidian, cracked obsidian, and fire)
         for (int y = 0; y < 5; y++) {
-            level.setBlock(ground.offset(-2, y, 0), y % 2 == 0 ? Blocks.CRYING_OBSIDIAN.defaultBlockState() : Blocks.OBSIDIAN.defaultBlockState(), 3);
-            level.setBlock(ground.offset(2, y, 0), Blocks.OBSIDIAN.defaultBlockState(), 3);
+            setBlockSafe(level, ground.offset(-2, y, 0), y % 2 == 0 ? Blocks.CRYING_OBSIDIAN.defaultBlockState() : Blocks.OBSIDIAN.defaultBlockState());
+            setBlockSafe(level, ground.offset(2, y, 0), Blocks.OBSIDIAN.defaultBlockState());
         }
-        level.setBlock(ground.offset(-1, 0, 0), Blocks.OBSIDIAN.defaultBlockState(), 3);
-        level.setBlock(ground.offset(0, 0, 0), Blocks.CRYING_OBSIDIAN.defaultBlockState(), 3);
-        level.setBlock(ground.offset(1, 0, 0), Blocks.OBSIDIAN.defaultBlockState(), 3);
+        setBlockSafe(level, ground.offset(-1, 0, 0), Blocks.OBSIDIAN.defaultBlockState());
+        setBlockSafe(level, ground.offset(0, 0, 0), Blocks.CRYING_OBSIDIAN.defaultBlockState());
+        setBlockSafe(level, ground.offset(1, 0, 0), Blocks.OBSIDIAN.defaultBlockState());
 
-        level.setBlock(ground.offset(-1, 4, 0), Blocks.OBSIDIAN.defaultBlockState(), 3);
-        level.setBlock(ground.offset(0, 4, 0), Blocks.OBSIDIAN.defaultBlockState(), 3);
+        setBlockSafe(level, ground.offset(-1, 4, 0), Blocks.OBSIDIAN.defaultBlockState());
+        setBlockSafe(level, ground.offset(0, 4, 0), Blocks.OBSIDIAN.defaultBlockState());
 
         // Gold Block Offering & Chest Platform
-        level.setBlock(ground.offset(0, 0, 2), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
-        level.setBlock(ground.offset(1, 0, 2), Blocks.CHEST.defaultBlockState(), 3);
+        setBlockSafe(level, ground.offset(0, 0, 2), Blocks.GOLD_BLOCK.defaultBlockState());
+        setBlockSafe(level, ground.offset(1, 0, 2), Blocks.CHEST.defaultBlockState());
 
         // Surrounding magma and crying obsidian scatter
-        level.setBlock(ground.offset(-3, -1, 1), Blocks.MAGMA_BLOCK.defaultBlockState(), 3);
-        level.setBlock(ground.offset(3, -1, -1), Blocks.MAGMA_BLOCK.defaultBlockState(), 3);
-        level.setBlock(ground.offset(1, 1, 0), Blocks.FIRE.defaultBlockState(), 3);
+        setBlockSafe(level, ground.offset(-3, -1, 1), Blocks.MAGMA_BLOCK.defaultBlockState());
+        setBlockSafe(level, ground.offset(3, -1, -1), Blocks.MAGMA_BLOCK.defaultBlockState());
+        setBlockSafe(level, ground.offset(1, 1, 0), Blocks.FIRE.defaultBlockState());
     }
 
     /**
      * Generates an abandoned rustic Overworld village cottage inside the Nether enclave.
      */
     private static void generateAbandonedOverworldCottage(ServerLevel level, BlockPos center) {
+        if (level == null || center == null || !level.isLoaded(center)) return;
         BlockPos ground = findNetherSurface(level, center);
         if (ground == null) ground = center;
+        if (!level.isLoaded(ground)) return;
 
         // 5x5 Cobblestone & Oak Cottage
         for (int x = -2; x <= 2; x++) {
             for (int z = -2; z <= 2; z++) {
-                level.setBlock(ground.offset(x, -1, z), Blocks.COBBLESTONE.defaultBlockState(), 3);
+                setBlockSafe(level, ground.offset(x, -1, z), Blocks.COBBLESTONE.defaultBlockState());
                 for (int y = 0; y <= 3; y++) {
                     boolean isCorner = (Math.abs(x) == 2 && Math.abs(z) == 2);
                     boolean isWall = (Math.abs(x) == 2 || Math.abs(z) == 2);
                     if (isCorner) {
-                        level.setBlock(ground.offset(x, y, z), Blocks.OAK_LOG.defaultBlockState(), 3);
+                        setBlockSafe(level, ground.offset(x, y, z), Blocks.OAK_LOG.defaultBlockState());
                     } else if (isWall) {
                         if (x == 0 && z == -2 && (y == 0 || y == 1)) {
                             // Door entrance (leave open or broken)
                             continue;
                         }
-                        level.setBlock(ground.offset(x, y, z), Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                        setBlockSafe(level, ground.offset(x, y, z), Blocks.OAK_PLANKS.defaultBlockState());
                     }
                 }
             }
@@ -346,13 +405,13 @@ public class DimensionalScarGenerator {
         // Roof (Cobblestone)
         for (int x = -2; x <= 2; x++) {
             for (int z = -2; z <= 2; z++) {
-                level.setBlock(ground.offset(x, 4, z), Blocks.COBBLESTONE.defaultBlockState(), 3);
+                setBlockSafe(level, ground.offset(x, 4, z), Blocks.COBBLESTONE.defaultBlockState());
             }
         }
 
         // Interior relics: Crafting table, abandoned chest, cobwebs
-        level.setBlock(ground.offset(1, 0, 1), Blocks.CRAFTING_TABLE.defaultBlockState(), 3);
-        level.setBlock(ground.offset(-1, 0, 1), Blocks.CHEST.defaultBlockState(), 3);
-        level.setBlock(ground.offset(1, 2, -1), Blocks.COBWEB.defaultBlockState(), 3);
+        setBlockSafe(level, ground.offset(1, 0, 1), Blocks.CRAFTING_TABLE.defaultBlockState());
+        setBlockSafe(level, ground.offset(-1, 0, 1), Blocks.CHEST.defaultBlockState());
+        setBlockSafe(level, ground.offset(1, 2, -1), Blocks.COBWEB.defaultBlockState());
     }
 }

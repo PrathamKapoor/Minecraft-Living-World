@@ -1,9 +1,9 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-10T16:20:00Z
-- Active milestone/task: Version 0.2.6 Civilization Intelligence, Dimensional Scars & Release Engineering — COMPLETE
-- Last known passing build: STEP 0022 (livingworld-0.2.6.jar with 78 classes, 355,243 bytes; 78/78 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
+- UTC time: 2026-11-10T17:00:00Z
+- Active milestone/task: Integrated Server Watchdog Deadlock Elimination & Chunk-Bounded Scar Slicing — COMPLETE
+- Last known passing build: STEP 0023 (livingworld-0.2.6.jar with 78 classes, 357,654 bytes; 78/78 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
 - Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
 - Rollback Point Established: `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
 - Prior Rollback Points:
@@ -12,7 +12,7 @@
   - `backup_v0.2.2/livingworld-0.2.2.jar` (SHA256: 2E79A77A764951F434F15AAF50F71F3DBDC51F8560215E9B73A2456E6F218B00)
   - `backup_v0.2.1/livingworld-0.2.1.jar` (SHA256: CB7A121B050601418FEDAC95AFC7C038468EC6A2C27C97A044774363CF1028A3)
   - `backup_v0.2.0/livingworld-0.2.0.jar` (SHA256: 96B73EBDB46B6624842469FE5884AE449ADC62D74FE9EED71D0EADA14014B4E0)
-- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar (355,243 bytes)
+- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar (357,654 bytes)
 - Integrated Dependencies: 20 active Fabric mods in `instances/LivingWorld/minecraft/mods/`
 - Files modified but unverified: None (78/78 acceptance tests & 7/7 gameplay playtest scenarios passed)
 - Known blockers: None
@@ -22,6 +22,34 @@
 ---
 
 ## CHRONOLOGICAL JOURNAL
+
+### 2026-11-10T17:00:00Z — STEP 0023 — DONE
+Goal: Eliminate Integrated Server Watchdog Deadlock (`ClientShutdownWatchdog` exit code `-805306369`) during chunk loading and world save/shutdown:
+  1. Root cause: Synchronous multi-chunk world modification and block queries inside `ServerChunkEvents.CHUNK_LOAD` -> `DimensionalScarManager.onChunkLoad` -> `DimensionalScarGenerator.generateScar`. Querying unloaded neighbor chunks via `level.getBlockState()`, `level.setBlock()`, and `ProtectionManager.isProtectedBlock()` forced synchronous chunk loading while chunk loading locks were held, deadlocking `ServerChunkCache.getChunk()`.
+  2. Guard `ProtectionManager.isProtectedBlock(level, pos)` with `!level.isLoaded(pos)` to prevent unloaded chunk access.
+  3. Re-architect `DimensionalScarManager`:
+     - `onChunkLoad` enqueues loaded chunks into thread-safe `pendingQueues` in O(1) time without block access.
+     - `tick(ServerLevel level)` scheduled in `ServerTickEvents.END_LEVEL_TICK` (Overworld and Nether) to process up to 4 chunk slices per tick on the main level thread.
+     - Centralized `clear()` registered in `ServerLifecycleEvents.SERVER_STOPPED`.
+  4. Implement Chunk-Bounded Slicing in `DimensionalScarGenerator.generateScarChunk`:
+     - All block reads and writes strictly confined to the 16x16 column of the active chunk (`chunkPos.x() << 4` to `+15`, `chunkPos.z() << 4` to `+15`).
+     - Added `setBlockSafe()`, `isAirSafe()`, and guarded `findNetherSurface()` with `level.isLoaded()` checks.
+     - Central monument ruins (ruined gateway portal / lost cottage) generate strictly within the chunk containing the center coordinates.
+  5. Built and deployed `livingworld-0.2.6.jar` (357,654 bytes) to `instances/LivingWorld/minecraft/mods/`.
+  6. Verified: 78/78 acceptance tests passed, 7/7 gameplay playtest scenarios passed.
+Files Modified/Created:
+  - `src/main/java/livingworld/core/ProtectionManager.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarGenerator.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarManager.java`
+  - `src/main/java/livingworld/LivingWorldMod.java`
+  - `decisions.md`
+  - `flow.md`
+Verification:
+  - `powershell -File .\scripts\build.ps1` -> PASSED
+  - `powershell -File .\scripts\test.ps1` -> 78/78 PASSED
+  - `powershell -File .\scripts\test_gameplay.ps1` -> 7/7 Scenarios PASSED
+
+---
 
 ### 2026-11-10T16:20:00Z — STEP 0022 — DONE
 Goal: Execute Version 0.2.6 Civilization Intelligence, Dimensional Scars & Release Engineering:

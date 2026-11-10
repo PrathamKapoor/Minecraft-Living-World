@@ -435,3 +435,27 @@ Verification:
   - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
   - Deployed to Prism Launcher instance `instances/LivingWorld/minecraft/mods/livingworld-0.2.6.jar`.
 Revisit trigger: Cross-dimensional invasion events or planar rift stability mechanics.
+
+---
+
+## DEC-0019 — Chunk-Bounded Slicing & Asynchronous Level-Tick Queue for Dimensional Scar Worldgen
+Date: 2026-11-10T17:00:00Z
+Status: accepted
+Context: In Prism Launcher instance `LivingWorld`, closing the game window or stopping the server triggered a fatal JVM abort by `ClientShutdownWatchdog` (exit code `-805306369`). Thread stack analysis revealed the integrated server thread was deadlocked in `ServerChunkCache.getChunk(x, z)` called via `ProtectionManager.isProtectedBlock()` during `DimensionalScarGenerator.generateScar()`, which was invoked synchronously from `ServerChunkEvents.CHUNK_LOAD`. Generating a 150-block diameter feature synchronously inside a chunk load callback attempted to query and modify blocks across 9 to 25 neighbor chunks, forcing synchronous chunk loading while chunk loader tasks and locks were held.
+Options:
+  1. Reduce scar radius to a single chunk or disable scars on chunk load.
+  2. Implement Chunk-Bounded Slicing with a decoupled Asynchronous Level-Tick Queue:
+     - `DimensionalScarManager.onChunkLoad` enqueues loaded `ChunkPos` in O(1) time with zero block queries or world modifications.
+     - `DimensionalScarManager.tick(ServerLevel)` drains up to 4 chunk slices per tick on the main level tick thread (`ServerTickEvents.END_LEVEL_TICK`).
+     - `DimensionalScarGenerator.generateScarChunk` restricts all block queries and modifications strictly within the 16x16 bounding box of the active chunk.
+     - Guard every block read/write with `level.isLoaded(pos)` and safe setting primitives (`setBlockSafe`, `isAirSafe`, `findNetherSurface`).
+     - Central monuments (ruined portal / cottage) generate strictly within the chunk containing the center coordinates.
+     - Clear pending queues and state on `ServerLifecycleEvents.SERVER_STOPPED`.
+Decision: Option 2.
+Rationale: Completely eliminates recursive chunk loading deadlocks and server watchdog timeouts while preserving the full 80–180m noise-displaced organic scar visuals. As chunks load around the player, each chunk naturally and seamlessly materializes its slice of the scar with zero chunk-boundary crossing.
+Trade-offs: Slices materialize incrementally across tick frames (imperceptible to players during standard chunk streaming).
+Verification:
+  - 78/78 automated acceptance tests passed (`scripts/test.ps1`).
+  - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - Built and deployed `livingworld-0.2.6.jar` (357,654 bytes) to `instances/LivingWorld/minecraft/mods/`.
+Revisit trigger: Additional multi-chunk procedural world structures requiring cross-chunk boundary generation.
