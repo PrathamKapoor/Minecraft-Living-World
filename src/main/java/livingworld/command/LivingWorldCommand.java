@@ -1,8 +1,15 @@
 package livingworld.command;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.minecraft.world.entity.raid.Raider;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import livingworld.illager.RaidTactics;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -137,13 +144,44 @@ public class LivingWorldCommand {
                     .then(Commands.literal("allegiance").executes(LivingWorldCommand::executeMilitaryAllegiance))
                     .then(Commands.literal("recruit")
                         .then(Commands.literal("melee").executes(ctx -> executeMilitaryRecruit(ctx, false)))
-                        .then(Commands.literal("archer").executes(ctx -> executeMilitaryRecruit(ctx, true)))))
+                        .then(Commands.literal("archer").executes(ctx -> executeMilitaryRecruit(ctx, true)))
+                        .then(Commands.literal("cavalry")
+                            .then(Commands.literal("swordsman").executes(ctx -> executeMilitaryRecruitCavalry(ctx, livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN)))
+                            .then(Commands.literal("scout").executes(ctx -> executeMilitaryRecruitCavalry(ctx, livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SCOUT)))
+                            .then(Commands.literal("captain").executes(ctx -> executeMilitaryRecruitCavalry(ctx, livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_CAPTAIN)))
+                            .executes(ctx -> executeMilitaryRecruitCavalry(ctx, livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN)))
+                        .then(Commands.literal("dog")
+                            .then(Commands.literal("companion").executes(ctx -> executeMilitaryRecruitDog(ctx, true)))
+                            .executes(ctx -> executeMilitaryRecruitDog(ctx, false)))))
                 .then(Commands.literal("armory")
                     .then(Commands.literal("stock").executes(LivingWorldCommand::executeArmoryStock)))
                 .then(Commands.literal("professions")
                     .then(Commands.literal("list").executes(LivingWorldCommand::executeProfessionsList)))
                 .then(Commands.literal("golems")
                     .then(Commands.literal("status").executes(LivingWorldCommand::executeGolemsStatus)))
+                .then(Commands.literal("debug")
+                    .then(Commands.literal("raiders")
+                        .then(Commands.literal("count").executes(LivingWorldCommand::executeRaidersCount))
+                        .then(Commands.literal("list").executes(LivingWorldCommand::executeRaidersList))
+                        .then(Commands.literal("teleport")
+                            .then(Commands.argument("radius", com.mojang.brigadier.arguments.IntegerArgumentType.integer(10, 256))
+                                .executes(LivingWorldCommand::executeRaidersTeleportRadius))
+                            .executes(LivingWorldCommand::executeRaidersTeleportDefault)))
+                    .then(Commands.literal("raid")
+                        .then(Commands.literal("status").executes(LivingWorldCommand::executeRaidStatus))
+                        .then(Commands.literal("stuck").executes(LivingWorldCommand::executeRaidStuck))
+                        .then(Commands.literal("resolve").executes(LivingWorldCommand::executeRaidResolve))))
+                .then(Commands.literal("scar")
+                    .then(Commands.literal("generate")
+                        .then(Commands.literal("warped").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.WARPED_FOREST)))
+                        .then(Commands.literal("crimson").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.CRIMSON_FOREST)))
+                        .then(Commands.literal("soulsand").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.SOUL_SAND_VALLEY)))
+                        .then(Commands.literal("basalt").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.BASALT_DELTAS)))
+                        .then(Commands.literal("wastes").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.NETHER_WASTES)))
+                        .then(Commands.literal("village").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.LOST_VILLAGE_ENCLAVE)))
+                        .then(Commands.literal("woodland").executes(ctx -> executeScarGenerate(ctx, livingworld.worldgen.DimensionalScarGenerator.ScarType.OVERWORLD_WOODLAND))))
+                    .then(Commands.literal("list").executes(LivingWorldCommand::executeScarList))
+                    .then(Commands.literal("nearest").executes(LivingWorldCommand::executeScarNearest)))
                 .then(Commands.literal("integrations")
                     .then(Commands.literal("list").executes(LivingWorldCommand::executeIntegrationsList))
                     .then(Commands.literal("mutant_monsters")
@@ -1035,6 +1073,44 @@ public class LivingWorldCommand {
         }
     }
 
+    private static int executeMilitaryRecruitCavalry(CommandContext<CommandSourceStack> context, livingworld.entity.VillageCavalryEntity.CavalryRole role) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        boolean success = livingworld.faction.VillageGuardManager.get().forceRecruitCavalry(level, s, pos, role);
+        if (success) {
+            String villageName = s != null ? s.getName() : "Local Garrison";
+            source.sendSuccess(() -> Component.literal("§6[Living World] §aMobilized §e" + role.name() + " §amounted cavalry unit for §6" + villageName + "!"), true);
+            return 1;
+        } else {
+            source.sendFailure(Component.literal("§6[Living World] §cFailed to mobilize cavalry unit."));
+            return 0;
+        }
+    }
+
+    private static int executeMilitaryRecruitDog(CommandContext<CommandSourceStack> context, boolean companion) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        livingworld.entity.VillageGuardEntity handler = null;
+        if (companion) {
+            AABB zone = AABB.ofSize(new Vec3(pos.getX(), pos.getY(), pos.getZ()), 16, 8, 16);
+            List<livingworld.entity.VillageGuardEntity> guards = level.getEntitiesOfClass(livingworld.entity.VillageGuardEntity.class, zone, g -> g.isAlive());
+            if (!guards.isEmpty()) handler = guards.get(0);
+        }
+        boolean success = livingworld.faction.VillageGuardManager.get().forceSpawnDog(level, s, pos, handler);
+        if (success) {
+            String desc = companion ? (handler != null ? "Guard Companion Dog paired with Guard " + handler.getRank() : "Guard Companion Dog") : "Civilian Village Dog";
+            source.sendSuccess(() -> Component.literal("§6[Living World] §aSpawned §e" + desc + "§a!"), true);
+            return 1;
+        } else {
+            source.sendFailure(Component.literal("§6[Living World] §cFailed to spawn village dog."));
+            return 0;
+        }
+    }
+
     private static int executeArmoryStock(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         BlockPos pos = BlockPos.containing(source.getPosition());
@@ -1083,6 +1159,193 @@ public class LivingWorldCommand {
         String summary = livingworld.faction.VillageGolemManager.get().getGolemSummary(level, s);
         source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Golem Status: " + s.getName() + " ==="), false);
         source.sendSuccess(() -> Component.literal("§7  " + summary), false);
+        return 1;
+    }
+
+    private static int executeRaidersCount(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        Vec3 pos = source.getPosition();
+        AABB zone = AABB.ofSize(pos, 256, 64, 256);
+        List<Raider> raiders = level.getEntitiesOfClass(Raider.class, zone, r -> r.isAlive());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Active Raiders in 128m Radius: §f" + raiders.size() + " ==="), false);
+        Map<String, Integer> counts = new HashMap<>();
+        for (Raider r : raiders) {
+            String type = BuiltInRegistries.ENTITY_TYPE.getKey(r.getType()).toString();
+            counts.put(type, counts.getOrDefault(type, 0) + 1);
+        }
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            source.sendSuccess(() -> Component.literal("  • " + entry.getKey() + ": §a" + entry.getValue()), false);
+        }
+        return raiders.size();
+    }
+
+    private static int executeRaidersList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        Vec3 pos = source.getPosition();
+        AABB zone = AABB.ofSize(pos, 256, 64, 256);
+        List<Raider> raiders = level.getEntitiesOfClass(Raider.class, zone, r -> r.isAlive());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Raider Unit List (128m) ==="), false);
+        if (raiders.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No active raiders detected in area."), false);
+            return 0;
+        }
+        for (int i = 0; i < Math.min(10, raiders.size()); i++) {
+            final int index = i + 1;
+            Raider r = raiders.get(i);
+            String name = r.getName().getString();
+            double dist = Math.sqrt(r.distanceToSqr(pos));
+            BlockPos bp = r.blockPosition();
+            float hp = r.getHealth();
+            source.sendSuccess(() -> Component.literal(String.format("  [%d] %s at (%d, %d, %d) | Dist: %.1fm | HP: %.1f",
+                index, name, bp.getX(), bp.getY(), bp.getZ(), dist, hp)), false);
+        }
+        if (raiders.size() > 10) {
+            source.sendSuccess(() -> Component.literal("  §7... and " + (raiders.size() - 10) + " more units."), false);
+        }
+        return raiders.size();
+    }
+
+    private static int executeRaidersTeleportDefault(CommandContext<CommandSourceStack> context) {
+        return executeRaidersTeleport(context, 64);
+    }
+
+    private static int executeRaidersTeleportRadius(CommandContext<CommandSourceStack> context) {
+        int radius = IntegerArgumentType.getInteger(context, "radius");
+        return executeRaidersTeleport(context, radius);
+    }
+
+    private static boolean hasOperatorPermission(CommandSourceStack source) {
+        if (!source.isPlayer()) return true;
+        if (source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER)) return true;
+        return source.getPlayer() != null && source.getServer().getPlayerList().isOp(source.getPlayer().nameAndId());
+    }
+
+    private static int executeRaidersTeleport(CommandContext<CommandSourceStack> context, int radius) {
+        CommandSourceStack source = context.getSource();
+        if (!hasOperatorPermission(source)) {
+            source.sendFailure(Component.literal("§cPermission denied: operator privilege required."));
+            return 0;
+        }
+        ServerLevel level = source.getLevel();
+        Vec3 pos = source.getPosition();
+        AABB zone = AABB.ofSize(pos, radius * 2, 64, radius * 2);
+        List<Raider> raiders = level.getEntitiesOfClass(Raider.class, zone, r -> r.isAlive());
+        if (raiders.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("§6[Living World] §eNo raiders found within " + radius + "m radius."), false);
+            return 0;
+        }
+        int count = 0;
+        for (Raider r : raiders) {
+            double angle = (count * (Math.PI * 2) / Math.max(1, raiders.size()));
+            double offsetDist = 3.0 + (count % 3);
+            double tx = pos.x + Math.cos(angle) * offsetDist;
+            double tz = pos.z + Math.sin(angle) * offsetDist;
+            r.teleportTo(tx, pos.y, tz);
+            count++;
+        }
+        int finalCount = count;
+        source.sendSuccess(() -> Component.literal("§6[Living World] §aTeleported §f" + finalCount + " §araiders within §f" + radius + "m §ato your location."), true);
+        return count;
+    }
+
+    private static int executeRaidStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        var raid = level.getRaidAt(pos);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Raid Diagnostic Status ==="), false);
+        if (raid != null) {
+            source.sendSuccess(() -> Component.literal("  Active Raid: §aYES §7(Wave: §e" + raid.getGroupsSpawned() + "/" + raid.getNumGroups(level.getDifficulty()) + "§7)"), false);
+            source.sendSuccess(() -> Component.literal("  Raiders Remaining: §f" + raid.getTotalRaidersAlive()), false);
+            source.sendSuccess(() -> Component.literal("  Raid State: §f" + (raid.isVictory() ? "VICTORY" : (raid.isLoss() ? "LOSS" : "ACTIVE"))), false);
+        } else {
+            source.sendSuccess(() -> Component.literal("  Active Vanilla Raid: §7None at current location."), false);
+        }
+        if (s != null) {
+            var state = livingworld.faction.VillageDefenseController.get().getState(s.getId());
+            source.sendSuccess(() -> Component.literal("  Settlement Defense State: " + state.getThreatLevel().getDisplay()), false);
+            source.sendSuccess(() -> Component.literal("  Primary Threat: §f" + state.getPrimaryThreatDescription()), false);
+        }
+        return 1;
+    }
+
+    private static int executeRaidStuck(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        List<Raider> stuck = RaidTactics.get().getStuckRaiders(level, pos, 96.0);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Stuck Raiders Diagnostic ==="), false);
+        if (stuck.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §aNo stuck raiders detected within 96m."), false);
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("  §cStuck Raiders Count: §f" + stuck.size()), false);
+        for (Raider r : stuck) {
+            BlockPos bp = r.blockPosition();
+            source.sendSuccess(() -> Component.literal("    • " + r.getName().getString() + " trapped at (" + bp.getX() + ", " + bp.getY() + ", " + bp.getZ() + ")"), false);
+        }
+        return stuck.size();
+    }
+
+    private static int executeRaidResolve(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        int recovered = RaidTactics.get().recoverStuckRaiders(level, pos, 96.0);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §aRaid Resolve: Recovered §f" + recovered + " §astuck raiders to village surface roads."), true);
+        return recovered;
+    }
+
+    private static int executeScarGenerate(CommandContext<CommandSourceStack> context, livingworld.worldgen.DimensionalScarGenerator.ScarType type) {
+        CommandSourceStack source = context.getSource();
+        if (!hasOperatorPermission(source)) {
+            source.sendFailure(Component.literal("§cPermission denied: operator privilege required."));
+            return 0;
+        }
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        int radius = FeatureConfig.get().scarDefaultDiameter / 2;
+        boolean success = livingworld.worldgen.DimensionalScarGenerator.generateScar(level, pos, type, radius);
+        if (success) {
+            source.sendSuccess(() -> Component.literal("§6[Living World] §aGenerated §e" + type.getTitle() + "§a at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ") with radius " + radius + "m!"), true);
+            return 1;
+        } else {
+            source.sendFailure(Component.literal("§6[Living World] §cFailed to generate dimensional scar (location protected or invalid)."));
+            return 0;
+        }
+    }
+
+    private static int executeScarList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        var scars = livingworld.worldgen.DimensionalScarManager.get().getAllScars();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Dimensional Scars Registry: §f" + scars.size() + " ==="), false);
+        if (scars.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  §7No dimensional scars registered in this world yet."), false);
+            return 0;
+        }
+        for (var scar : scars) {
+            BlockPos c = scar.getCenter();
+            source.sendSuccess(() -> Component.literal(String.format("  • %s at (%d, %d, %d) | Radius: %dm | Dim: %s",
+                scar.getType().getTitle(), c.getX(), c.getY(), c.getZ(), scar.getRadius(), scar.getDimension())), false);
+        }
+        return scars.size();
+    }
+
+    private static int executeScarNearest(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        var scar = livingworld.worldgen.DimensionalScarManager.get().getNearestScar(pos);
+        if (scar == null) {
+            source.sendSuccess(() -> Component.literal("§6[Living World] §7No dimensional scars discovered yet."), false);
+            return 0;
+        }
+        BlockPos c = scar.getCenter();
+        double dist = Math.sqrt(c.distSqr(pos));
+        source.sendSuccess(() -> Component.literal(String.format("§6[Living World] §eNearest Dimensional Scar: §f%s §7at (%d, %d, %d) | Distance: §a%.1fm",
+            scar.getType().getTitle(), c.getX(), c.getY(), c.getZ(), dist)), false);
         return 1;
     }
 }

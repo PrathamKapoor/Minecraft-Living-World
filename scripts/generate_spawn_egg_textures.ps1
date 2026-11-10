@@ -63,34 +63,46 @@ $eggs = @(
         id = "village_archer_spawn_egg"
         baseR = 147; baseG = 97; baseB = 62
         spotR = 39; spotG = 174; spotB = 96
+    },
+    @{
+        id = "village_dog_spawn_egg"
+        baseR = 215; baseG = 197; baseB = 175
+        spotR = 191; spotG = 76; spotB = 58
+    },
+    @{
+        id = "village_cavalry_spawn_egg"
+        baseR = 147; baseG = 97; baseB = 62
+        spotR = 241; spotG = 196; spotB = 15
     }
 )
 
-# Standard Minecraft Spawn Egg Silhouette Mask (16x16)
-# 0 = transparent, 1 = outline, 2 = body, 3 = highlight, 4 = spots
+# Authentic 12x14 Vanilla Minecraft Spawn Egg Silhouette Mask (BUG-13 Fix)
+# Exact proportions matching vanilla item spawn eggs:
+# 2-pixel transparent padding on left/right, 1-pixel on top/bottom
+# 0 = transparent, 1 = outline, 2 = base body, 3 = highlight, 4 = spots
 $eggMask = @(
+    "0000000000000000",
     "0000001111000000",
-    "0000113322110000",
-    "0001333222221000",
-    "0013344224422100",
-    "0133444244442210",
-    "0132442244422210",
-    "1332222222222221",
-    "1322244224422221",
-    "1322444444442221",
-    "1222444444442221",
-    "1222244224422221",
-    "0122222222222210",
-    "0122224444222210",
-    "0012224444222100",
-    "0001122222211000",
-    "0000011111100000"
+    "0000013322100000",
+    "0000133442210000",
+    "0001334444221000",
+    "0001324424421000",
+    "0013322222222100",
+    "0013224424422100",
+    "0013244444422100",
+    "0012244444422100",
+    "0012224424422100",
+    "0012222222222100",
+    "0001222442221000",
+    "0000122442210000",
+    "0000011221100000",
+    "0000000000000000"
 )
 
 foreach ($egg in $eggs) {
     $id = $egg.id
 
-    # 1. Item JSON
+    # 1. Item JSON (Minecraft 26.3 item definition)
     $itemJson = @{
         model = @{
             type = "minecraft:model"
@@ -99,7 +111,7 @@ foreach ($egg in $eggs) {
     } | ConvertTo-Json -Depth 5
     Set-Content -Path "$itemsDir/$id.json" -Value $itemJson
 
-    # 2. Model JSON
+    # 2. Model JSON (standard generated item model)
     $modelJson = @{
         parent = "minecraft:item/generated"
         textures = @{
@@ -108,11 +120,11 @@ foreach ($egg in $eggs) {
     } | ConvertTo-Json -Depth 5
     Set-Content -Path "$modelsDir/$id.json" -Value $modelJson
 
-    # 3. 16x16 Pixel Art Texture
+    # 3. 16x16 Pixel Art Texture with authentic 12x14 egg silhouette
     $bmp = New-Object System.Drawing.Bitmap 16, 16
     
-    $cOutline = [System.Drawing.Color]::FromArgb(255, [Math]::Max(0, [int]($egg.baseR * 0.4)), [Math]::Max(0, [int]($egg.baseG * 0.4)), [Math]::Max(0, [int]($egg.baseB * 0.4)))
-    $cHighlight = [System.Drawing.Color]::FromArgb(255, [Math]::Min(255, [int]($egg.baseR * 1.35)), [Math]::Min(255, [int]($egg.baseG * 1.35)), [Math]::Min(255, [int]($egg.baseB * 1.35)))
+    $cOutline = [System.Drawing.Color]::FromArgb(255, [Math]::Max(0, [int]($egg.baseR * 0.45)), [Math]::Max(0, [int]($egg.baseG * 0.45)), [Math]::Max(0, [int]($egg.baseB * 0.45)))
+    $cHighlight = [System.Drawing.Color]::FromArgb(255, [Math]::Min(255, [int]($egg.baseR * 1.30)), [Math]::Min(255, [int]($egg.baseG * 1.30)), [Math]::Min(255, [int]($egg.baseB * 1.30)))
     $cBase = [System.Drawing.Color]::FromArgb(255, [int]$egg.baseR, [int]$egg.baseG, [int]$egg.baseB)
     $cSpot = [System.Drawing.Color]::FromArgb(255, [int]$egg.spotR, [int]$egg.spotG, [int]$egg.spotB)
 
@@ -133,7 +145,7 @@ foreach ($egg in $eggs) {
     $outPng = "$texturesDir/$id.png"
     $bmp.Save($outPng, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
-    Write-Host "Generated assets for $id -> $outPng"
+    Write-Host "Generated authentic proportional assets for $id -> $outPng"
 }
 
-Write-Host "All 11 spawn egg items, models, and textures generated successfully."
+Write-Host "All 13 spawn egg items, models, and textures generated with authentic vanilla proportions."
