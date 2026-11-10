@@ -127,6 +127,23 @@ public class LivingWorldCommand {
                         .then(Commands.literal("inspect").executes(LivingWorldCommand::executeHordeInspect)))
                     .then(Commands.literal("visual")
                         .then(Commands.literal("catalog").executes(LivingWorldCommand::executeVisualCatalog))))
+                .then(Commands.literal("defense")
+                    .then(Commands.literal("status").executes(LivingWorldCommand::executeDefenseStatus))
+                    .then(Commands.literal("alarm")
+                        .then(Commands.literal("on").executes(ctx -> executeDefenseAlarm(ctx, true)))
+                        .then(Commands.literal("off").executes(ctx -> executeDefenseAlarm(ctx, false))))
+                    .then(Commands.literal("sentries").executes(LivingWorldCommand::executeDefenseSentries)))
+                .then(Commands.literal("military")
+                    .then(Commands.literal("allegiance").executes(LivingWorldCommand::executeMilitaryAllegiance))
+                    .then(Commands.literal("recruit")
+                        .then(Commands.literal("melee").executes(ctx -> executeMilitaryRecruit(ctx, false)))
+                        .then(Commands.literal("archer").executes(ctx -> executeMilitaryRecruit(ctx, true)))))
+                .then(Commands.literal("armory")
+                    .then(Commands.literal("stock").executes(LivingWorldCommand::executeArmoryStock)))
+                .then(Commands.literal("professions")
+                    .then(Commands.literal("list").executes(LivingWorldCommand::executeProfessionsList)))
+                .then(Commands.literal("golems")
+                    .then(Commands.literal("status").executes(LivingWorldCommand::executeGolemsStatus)))
                 .then(Commands.literal("integrations")
                     .then(Commands.literal("list").executes(LivingWorldCommand::executeIntegrationsList))
                     .then(Commands.literal("mutant_monsters")
@@ -138,7 +155,7 @@ public class LivingWorldCommand {
 
     private static int executeStatus(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
-        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.3)"), false);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.5)"), false);
         source.sendSuccess(() -> Component.literal("§7Target: Minecraft 26.3 | Fabric 0.20.1 | Java 25"), false);
         int villageCount = SettlementManager.get().getAllSettlements().size();
         source.sendSuccess(() -> Component.literal("§7Active Settlements: §e" + villageCount), false);
@@ -913,6 +930,159 @@ public class LivingWorldCommand {
         source.sendSuccess(() -> Component.literal("  §f• Village Archer §7(28 HP, Full Iron, Tactical Kiting AI, Ranged Defense)"), false);
         source.sendSuccess(() -> Component.literal("  §f• Village Guard §7(30 HP, Full Iron, Shield Blocking, Soldier-to-Royal Ranks)"), false);
         source.sendSuccess(() -> Component.literal("§d[Visual Provenance]: §7Documented in §edocs/VISUAL_REFERENCES.md§7 and §edocs/VISUAL_ACCEPTANCE_REPORT.md§7."), false);
+        return 1;
+    }
+
+    private static int executeDefenseStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+
+        var state = livingworld.faction.VillageDefenseController.get().getState(s.getId());
+        var sentries = livingworld.faction.VillageDefenseController.get().getActiveSentries(level, s);
+        boolean onCooldown = livingworld.faction.VillageDefenseController.get().isOnAlarmCooldown(s);
+
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Defense Status: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Threat Level: " + state.getThreatLevel().getDisplay()), false);
+        source.sendSuccess(() -> Component.literal("§7  Lockdown Active: " + (state.isLockdownActive() ? "§cYES" : "§aNO")), false);
+        source.sendSuccess(() -> Component.literal("§7  Active Hostiles: §e" + state.getActiveHostileCount()), false);
+        source.sendSuccess(() -> Component.literal("§7  Primary Threat: §f" + state.getPrimaryThreatDescription()), false);
+        source.sendSuccess(() -> Component.literal("§7  Active Sentries: §b" + sentries.size()), false);
+        source.sendSuccess(() -> Component.literal("§7  Horn Cooldown: " + (onCooldown ? "§cActive (cooling down)" : "§aReady")), false);
+        return 1;
+    }
+
+    private static int executeDefenseAlarm(CommandContext<CommandSourceStack> context, boolean enable) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+
+        if (enable) {
+            livingworld.faction.VillageDefenseController.get().triggerThreatAlarm(level, s, pos, "Commander Manual Emergency Alarm");
+            source.sendSuccess(() -> Component.literal("§4[Living World] §cTactical horn sounded! Defenders rallied and lockdown ordered for §6" + s.getName()), true);
+        } else {
+            livingworld.faction.VillageDefenseController.get().clearAlarm(s);
+            source.sendSuccess(() -> Component.literal("§a[Living World] Defense alarm silenced. Threat cleared for §6" + s.getName()), true);
+        }
+        return 1;
+    }
+
+    private static int executeDefenseSentries(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+
+        var sentries = livingworld.faction.VillageDefenseController.get().getActiveSentries(level, s);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Active Sentries: " + s.getName() + " (" + sentries.size() + ") ==="), false);
+        int idx = 0;
+        for (var sentry : sentries) {
+            final int currentIdx = ++idx;
+            BlockPos sp = sentry.blockPosition();
+            source.sendSuccess(() -> Component.literal(String.format("§7  Sentry #%d: Pos (%d, %d, %d) | HP: %.1f | Target: %s",
+                currentIdx, sp.getX(), sp.getY(), sp.getZ(), sentry.getHealth(),
+                sentry.getTarget() != null ? sentry.getTarget().getName().getString() : "Watching perimeter (48-64m)")), false);
+        }
+        if (sentries.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("§7  No archers currently posted to sentry duty. Archery watchtower required."), false);
+        }
+        return 1;
+    }
+
+    private static int executeMilitaryAllegiance(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        var allDefenders = livingworld.faction.AllegianceRegistry.get().getAllDefenders();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Military Allegiance Matrix ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Registered Village Defenders: §e" + allDefenders.size()), false);
+        source.sendSuccess(() -> Component.literal("§a  Friendly-Fire Cancellation: §2ACTIVE (Arrow projectiles & melee between allies filtered)"), false);
+        source.sendSuccess(() -> Component.literal("§a  Ally Matrix:"), false);
+        source.sendSuccess(() -> Component.literal("    • Guard <-> Guard: §2ALLIED (Never attack)"), false);
+        source.sendSuccess(() -> Component.literal("    • Guard <-> Archer: §2ALLIED (Immune to stray arrows)"), false);
+        source.sendSuccess(() -> Component.literal("    • Guard <-> Iron/Snow Golem: §2ALLIED (Joint defense)"), false);
+        source.sendSuccess(() -> Component.literal("    • Guard <-> Civilians: §2PROTECT (Never targeted)"), false);
+        source.sendSuccess(() -> Component.literal("    • Guard <-> Player: §aFORGIVING (2 accidental hits tolerated before hostility)"), false);
+        return 1;
+    }
+
+    private static int executeMilitaryRecruit(CommandContext<CommandSourceStack> context, boolean archer) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        boolean success = livingworld.faction.VillageGuardManager.get().forceRecruit(level, s, pos, archer);
+        if (success) {
+            String roleName = archer ? "Village Archer" : "Village Guard";
+            String villageName = s != null ? s.getName() : "Local Garrison";
+            source.sendSuccess(() -> Component.literal("§6[Living World] §aSuccessfully recruited new §e" + roleName + "§a for §6" + villageName + "§a from armory!"), true);
+            return 1;
+        } else {
+            source.sendFailure(Component.literal("§6[Living World] §cFailed to recruit guard."));
+            return 0;
+        }
+    }
+
+    private static int executeArmoryStock(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+        var stock = livingworld.economy.VillageArmoryManager.get().getStock(s);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Armory Inventory: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  " + stock.getSummary()), false);
+        source.sendSuccess(() -> Component.literal("§7  Melee Gear Available: " + (stock.hasMeleeGuardGear() ? "§aYES" : "§cNO")), false);
+        source.sendSuccess(() -> Component.literal("§7  Archer Gear Available: " + (stock.hasArcherGear() ? "§aYES" : "§cNO")), false);
+        return 1;
+    }
+
+    private static int executeProfessionsList(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+        var census = livingworld.economy.VillageWorkforceManager.get().getCensus(s.getId());
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Workforce Census: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Total Population: §f" + census.getTotalVillagers() + " §7(Unemployed: §e" + census.getUnemployedCount() + "§7, Children: §b" + census.getChildrenCount() + "§7)"), false);
+        source.sendSuccess(() -> Component.literal("§7  Staffed Professions (2+ adults): §a" + census.getStaffedProfessionsCount() + "/13"), false);
+        for (var prof : livingworld.economy.VillageWorkforceManager.ManagedProfession.values()) {
+            int count = census.getCount(prof);
+            String status = count >= 2 ? "§a" + count + " §7(Staffed)" : (count == 1 ? "§e1 §7(Needs 1)" : "§c0 §7(Deficit)");
+            source.sendSuccess(() -> Component.literal("    • " + prof.getTitle() + ": " + status), false);
+        }
+        return 1;
+    }
+
+    private static int executeGolemsStatus(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+        String summary = livingworld.faction.VillageGolemManager.get().getGolemSummary(level, s);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Golem Status: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  " + summary), false);
         return 1;
     }
 }

@@ -73,7 +73,10 @@ public class ZombieHordeManager {
             lastHordeSpawnAttempt = currentTicks;
             if (level.isDarkOutside() && activeCommanders.size() < FeatureConfig.get().maxActiveHordesPerWorld) {
                 for (ServerPlayer player : level.players()) {
-                    if (level.getRandom().nextInt(3) == 0) {
+                    livingworld.settlement.Settlement near = livingworld.settlement.SettlementManager.get().getNearestSettlement(player.blockPosition());
+                    // Underdeveloped village protection: reduce horde spawn frequency if population < 8
+                    int spawnChance = (near != null && near.getPopulation() < 8) ? 6 : 3;
+                    if (level.getRandom().nextInt(spawnChance) == 0) {
                         spawnHordeNear(level, player.blockPosition());
                         break;
                     }
@@ -185,6 +188,7 @@ public class ZombieHordeManager {
                 armored.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(40.0);
                 armored.setHealth(40.0f);
                 armored.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(4.0);
+                armored.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE).setBaseValue(4.5); // Rebalanced: ~10% damage tuning
                 armored.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
                 armored.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.CHAINMAIL_CHESTPLATE));
                 armored.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
@@ -205,6 +209,7 @@ public class ZombieHordeManager {
                 miner.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(32.0);
                 miner.setHealth(32.0f);
                 miner.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ARMOR).setBaseValue(2.0);
+                miner.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE).setBaseValue(3.6); // Rebalanced ~10%
                 ItemStack tool = (i % 2 == 0) ? new ItemStack(Items.IRON_PICKAXE) : new ItemStack(Items.IRON_AXE);
                 miner.setItemSlot(EquipmentSlot.MAINHAND, tool);
                 miner.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
@@ -240,6 +245,7 @@ public class ZombieHordeManager {
                 regular.setPos(p.getX() + 0.5, p.getY(), p.getZ() + 0.5);
                 regular.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(24.0);
                 regular.setHealth(24.0f);
+                regular.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE).setBaseValue(2.7); // Rebalanced ~10%
                 level.addFreshEntity(regular);
                 totalSpawned++;
             }

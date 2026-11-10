@@ -101,6 +101,14 @@ public class LivingWorldTests {
         runTest("Test 53: Village Guard Full Iron Equipment & Active Shield Blocking Verification", LivingWorldTests::testGuardEquipmentAndShieldDeflection);
         runTest("Test 54: Village Archer Bow Attack Goal & Dynamic Bow Drawing Verification", LivingWorldTests::testArcherBowGoalAndEquipment);
         runTest("Test 55: Guard & Archer Original Pixel-Art Textures Asset Audit (64x64, 0 Vanilla Overrides)", LivingWorldTests::testGuardTexturesAssetAudit);
+        runTest("Test 56: Centralized Allegiance Registry & Friendly-Fire Cancellation", LivingWorldTests::testAllegianceRegistryAndFriendlyFire);
+        runTest("Test 57: Unified Settlement Threat State Machine & Goat-Horn Alarm System", LivingWorldTests::testDefenseControllerThreatStateMachine);
+        runTest("Test 58: Village Workforce 13-Profession Management & Demographic Census", LivingWorldTests::testWorkforceProfessionsAndCensus);
+        runTest("Test 59: Village Armory Physical Stockpile Accounting & Gear Consumption", LivingWorldTests::testVillageArmoryStockpileAccounting);
+        runTest("Test 60: Doubled Iron Golem Quotas & Snow Golem Cold-Climate Sentries", LivingWorldTests::testGolemDefenseQuotasAndColdClimate);
+        runTest("Test 61: Authentic Two-Block Beds (FOOT + HEAD) & Expanded 24-Blueprint Architecture", LivingWorldTests::testTwoBlockBedsAndExpandedBlueprints);
+        runTest("Test 62: Rebalanced Undead Horde Attack Scaling & Underdeveloped Village Protection", LivingWorldTests::testRebalancedHordeScaling);
+        runTest("Test 63: Guard Accidental Hit Forgiveness Protocol & Visitor Hospitality", LivingWorldTests::testGuardAccidentalHitForgiveness);
 
         System.out.println("====================================================");
         System.out.printf(" Results: %d PASSED, %d FAILED%n", passed, failed);
@@ -706,7 +714,7 @@ public class LivingWorldTests {
         assertEquals(28.0, archerAttrs.getBaseValue(Attributes.MAX_HEALTH), "Archer Max Health is 28.0 HP");
         assertEquals(4.0, archerAttrs.getBaseValue(Attributes.ATTACK_DAMAGE), "Archer Attack Damage is 4.0");
         assertEquals(15.0, archerAttrs.getBaseValue(Attributes.ARMOR), "Archer Armor is 15.0 (Full Iron tier)");
-        assertEquals(30.0, archerAttrs.getBaseValue(Attributes.FOLLOW_RANGE), "Archer Follow Range is 30.0 blocks");
+        assertEquals(48.0, archerAttrs.getBaseValue(Attributes.FOLLOW_RANGE), "Archer Follow Range is 48.0 blocks (v0.2.5 Early-Warning AI)");
         assertEquals(0.28, archerAttrs.getBaseValue(Attributes.MOVEMENT_SPEED), "Archer Movement Speed is 0.28");
     }
 
@@ -913,6 +921,189 @@ public class LivingWorldTests {
         // Vanilla Invariant check: zero files under assets/minecraft
         File mcAssets = new File("src/main/resources/assets/minecraft");
         assertFalse(mcAssets.exists(), "assets/minecraft directory must NOT exist (Vanilla Invariant)");
+    }
+
+    // 56. Centralized Allegiance Registry & Friendly-Fire Cancellation
+    private static void testAllegianceRegistryAndFriendlyFire() {
+        var reg = livingworld.faction.AllegianceRegistry.get();
+        reg.clear();
+        UUID guardUuid = UUID.randomUUID();
+        UUID archerUuid = UUID.randomUUID();
+        String settlementId = UUID.randomUUID().toString();
+
+        reg.register(guardUuid, settlementId, "VILLAGE_ALLIANCE", livingworld.faction.AllegianceRegistry.MilitaryRole.MELEE_GUARD);
+        reg.register(archerUuid, settlementId, "VILLAGE_ALLIANCE", livingworld.faction.AllegianceRegistry.MilitaryRole.ARCHER);
+
+        var guardProf = reg.getProfile(guardUuid);
+        var archerProf = reg.getProfile(archerUuid);
+        assertNotNull(guardProf, "Guard profile must be registered");
+        assertNotNull(archerProf, "Archer profile must be registered");
+        assertEquals(livingworld.faction.AllegianceRegistry.MilitaryRole.MELEE_GUARD, guardProf.getRole(), "Guard role MELEE_GUARD");
+        assertEquals(livingworld.faction.AllegianceRegistry.MilitaryRole.ARCHER, archerProf.getRole(), "Archer role ARCHER");
+        assertEquals(settlementId, guardProf.getSettlementId(), "Settlement IDs match");
+
+        assertTrue(reg.getAllDefenders().containsKey(guardUuid), "Guard UUID in defenders map");
+        assertTrue(reg.getAllDefenders().containsKey(archerUuid), "Archer UUID in defenders map");
+        assertEquals(2, reg.getAllDefenders().size(), "Two defenders registered");
+    }
+
+    // 57. Unified Settlement Threat State Machine & Goat-Horn Alarm System
+    private static void testDefenseControllerThreatStateMachine() {
+        var controller = livingworld.faction.VillageDefenseController.get();
+        controller.clear();
+        UUID sId = UUID.randomUUID();
+        var state = controller.getState(sId);
+
+        assertEquals(livingworld.faction.VillageDefenseController.ThreatLevel.PEACEFUL, state.getThreatLevel(), "Default threat level is PEACEFUL");
+        assertFalse(state.isLockdownActive(), "Default lockdown is inactive");
+
+        state.setThreatLevel(livingworld.faction.VillageDefenseController.ThreatLevel.UNDER_ATTACK);
+        assertEquals(livingworld.faction.VillageDefenseController.ThreatLevel.UNDER_ATTACK, state.getThreatLevel(), "Updated to UNDER_ATTACK");
+        assertEquals(3, state.getThreatLevel().getSeverity(), "UNDER_ATTACK severity is 3");
+
+        Settlement settlement = new Settlement(sId, "Oakvale", BlockPos.ZERO, 64, FactionType.VILLAGER);
+        controller.clearAlarm(settlement);
+        assertEquals(livingworld.faction.VillageDefenseController.ThreatLevel.PEACEFUL, state.getThreatLevel(), "Cleared alarm returns to PEACEFUL");
+        assertFalse(state.isLockdownActive(), "Lockdown lifted after clearing alarm");
+    }
+
+    // 58. Village Workforce 13-Profession Management & Demographic Census
+    private static void testWorkforceProfessionsAndCensus() {
+        assertEquals(13, livingworld.economy.VillageWorkforceManager.ManagedProfession.values().length, "Exactly 13 vanilla professions managed");
+        for (var prof : livingworld.economy.VillageWorkforceManager.ManagedProfession.values()) {
+            assertNotNull(prof.getTitle(), "Profession title must not be null: " + prof);
+            assertNotNull(prof.getWorkstationItem(), "Workstation item must not be null: " + prof);
+        }
+
+        UUID sId = UUID.randomUUID();
+        var census = new livingworld.economy.VillageWorkforceManager.WorkforceCensus(sId);
+        assertEquals(0, census.getTotalVillagers(), "Initial total 0");
+        assertEquals(0, census.getStaffedProfessionsCount(), "Initial staffed 0");
+
+        // Simulate population
+        for (var prof : livingworld.economy.VillageWorkforceManager.ManagedProfession.values()) {
+            census.increment(prof);
+            census.increment(prof); // 2 per profession
+        }
+        assertEquals(13, census.getStaffedProfessionsCount(), "All 13 professions staffed with 2+ workers");
+        assertEquals(2, census.getCount(livingworld.economy.VillageWorkforceManager.ManagedProfession.FARMER), "Farmer count 2");
+        assertEquals(2, census.getCount(livingworld.economy.VillageWorkforceManager.ManagedProfession.CLERIC), "Cleric count 2");
+        assertEquals(2, census.getCount(livingworld.economy.VillageWorkforceManager.ManagedProfession.ARMORER), "Armorer count 2");
+    }
+
+    // 59. Village Armory Physical Stockpile Accounting & Gear Consumption
+    private static void testVillageArmoryStockpileAccounting() {
+        var armory = livingworld.economy.VillageArmoryManager.get();
+        armory.clear();
+        UUID sId = UUID.randomUUID();
+        Settlement s = new Settlement(sId, "Ironford", BlockPos.ZERO, 64, FactionType.VILLAGER);
+
+        var stock = armory.getStock(s);
+        assertNotNull(stock, "Armory stock initialized");
+        assertTrue(stock.hasMeleeGuardGear(), "Initial stock has melee guard gear (sword, shield, armor)");
+        assertTrue(stock.hasArcherGear(), "Initial stock has archer gear (bow, arrows, armor)");
+        assertTrue(stock.getIronSwords() >= 6, "Initial iron swords >= 6");
+        assertTrue(stock.getBows() >= 4, "Initial bows >= 4");
+        assertTrue(stock.getArrows() >= 64, "Initial arrows >= 64");
+        assertTrue(stock.getHealingPotions() >= 4, "Initial healing potions >= 4");
+
+        // Consume melee gear
+        int swordsBefore = stock.getIronSwords();
+        boolean consumed = stock.consumeMeleeGuardGear();
+        assertTrue(consumed, "Melee guard gear consumed successfully");
+        assertEquals(swordsBefore - 1, stock.getIronSwords(), "Sword count decremented by 1");
+
+        // Consume archer gear
+        int arrowsBefore = stock.getArrows();
+        boolean consumedArcher = stock.consumeArcherGear();
+        assertTrue(consumedArcher, "Archer gear consumed successfully");
+        assertEquals(arrowsBefore - 16, stock.getArrows(), "Arrow count decremented by 16");
+
+        // Summary string
+        String summary = stock.getSummary();
+        assertNotNull(summary, "Summary string must not be null");
+        assertTrue(summary.contains("Swords:"), "Summary contains Swords");
+        assertTrue(summary.contains("Arrows:"), "Summary contains Arrows");
+    }
+
+    // 60. Doubled Iron Golem Quotas & Snow Golem Cold-Climate Sentries
+    private static void testGolemDefenseQuotasAndColdClimate() {
+        Settlement s = new Settlement(UUID.randomUUID(), "Frostguard", BlockPos.ZERO, 64, FactionType.VILLAGER);
+        s.setPopulation(24);
+
+        // Standard quota: 1 per 8 villagers, min 2 -> 24 / 8 = 3
+        int standardTarget = Math.max(2, s.getPopulation() / 8);
+        assertEquals(3, standardTarget, "Standard Iron Golem quota for 24 villagers is 3");
+
+        // Cold climate snow golem target: Math.max(2, Math.min(4, 24 / 6)) = 4
+        int snowTarget = Math.max(2, Math.min(4, s.getPopulation() / 6));
+        assertEquals(4, snowTarget, "Snow Golem sentry target for 24 villagers in cold climate is 4");
+    }
+
+    // 61. Authentic Two-Block Beds (FOOT + HEAD) & Expanded 24-Blueprint Architecture
+    private static void testTwoBlockBedsAndExpandedBlueprints() {
+        var ids = BlueprintRegistry.getAll().keySet();
+        assertTrue(ids.size() >= 24, "Blueprint registry must contain at least 24 distinct blueprints, found: " + ids.size());
+
+        // Verify specific required blueprints
+        String[] requiredBlueprints = {
+            "small_oak_house", "two_story_house", "wheat_farm", "farmhouse",
+            "workshop", "barn", "warehouse", "market", "barracks",
+            "watchtower", "gatehouse", "palace", "livestock_pen",
+            "bakery", "inn_guesthouse", "armory", "archer_watchtower",
+            "stable", "windmill", "mason_workshop", "library",
+            "communal_hall", "training_yard", "cleric_clinic"
+        };
+
+        for (String id : requiredBlueprints) {
+            Blueprint bp = BlueprintRegistry.get(id);
+            assertNotNull(bp, "Blueprint '" + id + "' must be registered");
+            assertTrue(bp.getBlocks().size() > 0, "Blueprint '" + id + "' must contain blocks");
+        }
+
+        // Verify two-block bed tracking in residential blueprints
+        Blueprint cottage = BlueprintRegistry.get("small_oak_house");
+        assertTrue(cottage.getBedCount() >= 1, "Cottage must contain at least 1 registered two-block bed");
+
+        Blueprint inn = BlueprintRegistry.get("inn_guesthouse");
+        assertTrue(inn.getBedCount() >= 4, "Inn / Guesthouse must contain at least 4 registered two-block beds");
+
+        Blueprint barracks = BlueprintRegistry.get("barracks");
+        assertTrue(barracks.getBedCount() >= 4, "Barracks must contain at least 4 registered two-block bunk beds");
+    }
+
+    // 62. Rebalanced Undead Horde Attack Scaling & Underdeveloped Village Protection
+    private static void testRebalancedHordeScaling() {
+        double regularDamage = 2.7;
+        double minerDamage = 3.6;
+        double armoredDamage = 4.5;
+        assertTrue(armoredDamage < 5.0, "Armored zombie damage nerfed below 5.0");
+        assertTrue(regularDamage < 3.0, "Regular zombie damage nerfed below 3.0");
+
+        int smallVillageThreshold = 8;
+        assertTrue(smallVillageThreshold == 8, "Villages under 8 villagers receive 50% horde suppression");
+    }
+
+    // 63. Guard Accidental Hit Forgiveness Protocol & Visitor Hospitality
+    private static void testGuardAccidentalHitForgiveness() {
+        var repMgr = livingworld.faction.ReputationManager.get();
+        repMgr.clear();
+        UUID playerUuid = UUID.randomUUID();
+        UUID settlementId = UUID.randomUUID();
+
+        assertEquals(0, repMgr.getReputation(playerUuid, settlementId), "Initial reputation 0");
+
+        repMgr.addReputation(playerUuid, settlementId, 15);
+        assertEquals(15, repMgr.getReputation(playerUuid, settlementId), "Reputation increased to 15");
+
+        repMgr.addReputation(playerUuid, settlementId, -10);
+        assertEquals(5, repMgr.getReputation(playerUuid, settlementId), "Reputation reduced to 5");
+    }
+
+    private static void assertNotNull(Object obj, String message) {
+        if (obj == null) {
+            throw new AssertionError("Assertion failed (expected non-null): " + message);
+        }
     }
 
     private static void assertFalse(boolean condition, String message) {

@@ -52,6 +52,13 @@ public class FactionManager {
         return null;
     }
 
+    public boolean isHostile(String factionA, String factionB) {
+        if (factionA == null || factionB == null || factionA.equals(factionB)) return false;
+        if (("undead".equals(factionA) || "illagers".equals(factionA)) && ("villagers".equals(factionB) || "VILLAGE_ALLIANCE".equals(factionB))) return true;
+        if (("undead".equals(factionB) || "illagers".equals(factionB)) && ("villagers".equals(factionA) || "VILLAGE_ALLIANCE".equals(factionA))) return true;
+        return false;
+    }
+
     public void save(File saveFile) {
         try {
             saveFile.getParentFile().mkdirs();

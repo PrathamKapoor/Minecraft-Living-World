@@ -2,7 +2,9 @@ package livingworld.faction;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import livingworld.economy.VillageArmoryManager;
 import livingworld.entity.LivingWorldEntities;
+import livingworld.entity.VillageArcherEntity;
 import livingworld.entity.VillageGuardEntity;
 import livingworld.settlement.Settlement;
 import livingworld.settlement.VillagerIdentityManager;
@@ -21,10 +23,13 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Village Guard Recruitment, Promotion & Garrison Pipeline (Milestone 4).
- * Recruits able-bodied villagers into town guards, enforces minimum iron armor tiers,
- * tracks combat experience for rank promotions (Recruit -> Soldier -> Veteran -> Elite -> Royal),
- * and maintains defensive perimeter garrisons.
+ * Village Guard Recruitment, Promotion & Garrison Pipeline (v0.2.5 Living Village Rebuild).
+ * Coordinates military recruitment through central Guard Captain / Recruiting Officer authority:
+ * - Identifies personnel shortages vs village population targets
+ * - Requests authentic physical weapons and armor from the Village Armory
+ * - Enlists eligible unemployed adult villagers while preserving civilian workforce
+ * - Conducts visible recruitment ceremonies with audio/visual equip routines
+ * - Tracks combat experience for promotions (Recruit -> Soldier -> Veteran -> Elite -> Royal)
  */
 public class VillageGuardManager {
     private static final VillageGuardManager INSTANCE = new VillageGuardManager();
@@ -132,70 +137,97 @@ public class VillageGuardManager {
     }
 
     public void tickGuardRecruitment(ServerLevel level, Settlement settlement) {
-        if (settlement == null) return;
+        if (settlement == null || level == null) return;
 
         BlockPos center = settlement.getCenter();
         AABB villageArea = AABB.ofSize(new Vec3(center.getX(), center.getY(), center.getZ()),
             settlement.getRadius() * 2, 24, settlement.getRadius() * 2);
 
         List<VillageGuardEntity> currentGuards = level.getEntitiesOfClass(VillageGuardEntity.class, villageArea, g -> g.isAlive());
-        List<livingworld.entity.VillageArcherEntity> currentArchers = level.getEntitiesOfClass(livingworld.entity.VillageArcherEntity.class, villageArea, a -> a.isAlive());
+        List<VillageArcherEntity> currentArchers = level.getEntitiesOfClass(VillageArcherEntity.class, villageArea, a -> a.isAlive());
         int totalMilitary = currentGuards.size() + currentArchers.size();
         settlement.setGuardCount(totalMilitary);
 
-        // Target guard count: 1 guard per 3 villagers, minimum 2
-        int desiredGuards = Math.max(2, settlement.getPopulation() / 3);
+        // Target military force: 1 guard per 3 villagers, minimum 2 for small villages, up to 12
+        int desiredGuards = Math.max(2, Math.min(12, settlement.getPopulation() / 3));
         if (totalMilitary >= desiredGuards) {
             return;
         }
 
-        // Locate eligible unemployed villager to enlist
+        // Locate eligible unemployed adult villagers to enlist
         List<Villager> availableCivilians = level.getEntitiesOfClass(Villager.class, villageArea,
             v -> v.isAlive() && !v.isBaby());
 
-        if (availableCivilians.size() <= 2) {
-            return; // Maintain at least 2 breeding adults
+        // Maintain at least 4 civilians to preserve essential community professions and breeding
+        if (availableCivilians.size() <= 4) {
+            return;
         }
 
-        // Recruit civilian into military guard (maintain roughly 40% archers, 60% melee)
-        boolean recruitArcher = currentArchers.size() < Math.max(1, (int) Math.round(desiredGuards * 0.4));
-        Villager candidate = availableCivilians.get(level.getRandom().nextInt(availableCivilians.size()));
-        BlockPos recruitPos = candidate.blockPosition();
+        // Check Village Armory supply
+        VillageArmoryManager.ArmoryStock armory = VillageArmoryManager.get().getStock(settlement);
 
-        String guardName = candidate.getCustomName() != null ? candidate.getCustomName().getString() : "Alden";
-        guardName = guardName.replace("§e", "").replaceAll(" the .*", "");
+        // Maintain approximately 40% archers, 60% melee
+        boolean recruitArcher = currentArchers.size() < Math.max(1, (int) Math.round(desiredGuards * 0.4));
 
         if (recruitArcher) {
-            livingworld.entity.VillageArcherEntity archer = LivingWorldEntities.VILLAGE_ARCHER.create(level, EntitySpawnReason.EVENT);
+            if (!armory.hasArcherGear()) {
+                // Insufficient bows/arrows in armory stock
+                return;
+            }
+            armory.consumeArcherGear();
+
+            Villager candidate = availableCivilians.get(level.getRandom().nextInt(availableCivilians.size()));
+            BlockPos recruitPos = candidate.blockPosition();
+
+            String guardName = candidate.getCustomName() != null ? candidate.getCustomName().getString() : "Alden";
+            guardName = guardName.replace("§e", "").replaceAll(" the .*", "");
+
+            VillageArcherEntity archer = LivingWorldEntities.VILLAGE_ARCHER.create(level, EntitySpawnReason.EVENT);
             if (archer != null) {
                 archer.setPos(recruitPos.getX() + 0.5, recruitPos.getY(), recruitPos.getZ() + 0.5);
                 archer.setHomeSettlementId(settlement.getId().toString());
                 archer.setCustomName(Component.literal("§9[Archer] " + guardName));
                 archer.setCustomNameVisible(true);
+
+                // Assign watchtower sentry duty if needed
+                if (currentArchers.size() < 2) {
+                    archer.setWatchtowerSentry(true);
+                }
+
+                AllegianceRegistry.get().register(archer.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE",
+                    archer.isWatchtowerSentry() ? AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY : AllegianceRegistry.MilitaryRole.ARCHER);
+
                 level.addFreshEntity(archer);
                 candidate.discard();
 
+                // Audible & visual enlistment ceremony
                 level.playSound(null, recruitPos, SoundEvents.ARMOR_EQUIP_IRON.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
-                level.sendParticles(ParticleTypes.ENCHANTED_HIT, recruitPos.getX() + 0.5, recruitPos.getY() + 1.2, recruitPos.getZ() + 0.5, 12, 0.4, 0.4, 0.4, 0.1);
+                level.playSound(null, recruitPos, SoundEvents.VILLAGER_CELEBRATE, SoundSource.NEUTRAL, 0.8f, 1.2f);
+                level.sendParticles(ParticleTypes.ENCHANTED_HIT, recruitPos.getX() + 0.5, recruitPos.getY() + 1.2, recruitPos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
 
                 settlement.setGuardCount(totalMilitary + 1);
-                livingworld.LivingWorldMod.LOGGER.info("[Living World] Military enlistment: " + guardName + " recruited as Village Archer in " + settlement.getName());
+                livingworld.LivingWorldMod.LOGGER.info("[Living World] Enlistment: " + guardName + " equipped from Armory as Village Archer in " + settlement.getName());
                 return;
             }
         }
+
+        // Melee Guard Recruitment
+        if (!armory.hasMeleeGuardGear()) {
+            // Insufficient sword/shield/armor in armory stock
+            return;
+        }
+        armory.consumeMeleeGuardGear();
+
+        Villager candidate = availableCivilians.get(level.getRandom().nextInt(availableCivilians.size()));
+        BlockPos recruitPos = candidate.blockPosition();
+
+        String guardName = candidate.getCustomName() != null ? candidate.getCustomName().getString() : "Gareth";
+        guardName = guardName.replace("§e", "").replaceAll(" the .*", "");
 
         VillageGuardEntity guard = LivingWorldEntities.VILLAGE_GUARD.create(level, EntitySpawnReason.EVENT);
         if (guard != null) {
             guard.setPos(recruitPos.getX() + 0.5, recruitPos.getY(), recruitPos.getZ() + 0.5);
             guard.setHomeSettlementId(settlement.getId().toString());
-
-            // Enforce minimum iron tier equipment
-            guard.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-            guard.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-            guard.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
-            guard.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-            guard.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
-            guard.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
 
             GuardRecord record = new GuardRecord(guard.getUUID(), settlement.getId(), guardName, GuardRank.RECRUIT);
             guardRecords.put(guard.getUUID(), record);
@@ -203,15 +235,18 @@ public class VillageGuardManager {
             guard.setCustomName(Component.literal("§9[Guard " + record.getRank().getTitle() + "] " + guardName));
             guard.setCustomNameVisible(true);
 
+            AllegianceRegistry.get().register(guard.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.MELEE_GUARD);
+
             level.addFreshEntity(guard);
-            candidate.discard(); // Replaced with guard entity
+            candidate.discard();
 
             // Audio & visual recruitment ceremony
             level.playSound(null, recruitPos, SoundEvents.ARMOR_EQUIP_IRON.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
-            level.sendParticles(ParticleTypes.ENCHANTED_HIT, recruitPos.getX() + 0.5, recruitPos.getY() + 1.2, recruitPos.getZ() + 0.5, 12, 0.4, 0.4, 0.4, 0.1);
+            level.playSound(null, recruitPos, SoundEvents.VILLAGER_CELEBRATE, SoundSource.NEUTRAL, 0.8f, 1.2f);
+            level.sendParticles(ParticleTypes.ENCHANTED_HIT, recruitPos.getX() + 0.5, recruitPos.getY() + 1.2, recruitPos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
 
             settlement.setGuardCount(totalMilitary + 1);
-            livingworld.LivingWorldMod.LOGGER.info("[Living World] Military enlistment: " + guardName + " recruited as Village Guard in " + settlement.getName());
+            livingworld.LivingWorldMod.LOGGER.info("[Living World] Enlistment: " + guardName + " equipped from Armory as Village Guard in " + settlement.getName());
         }
     }
 
@@ -233,6 +268,54 @@ public class VillageGuardManager {
                 livingworld.LivingWorldMod.LOGGER.info("[Living World] Military promotion: Guard " + record.getName() + " promoted to " + record.getRank().getTitle() + "!");
             }
         }
+    }
+
+    public boolean forceRecruit(ServerLevel level, Settlement settlement, BlockPos pos, boolean isArcher) {
+        if (level == null || pos == null) return false;
+        String settlementId = settlement != null ? settlement.getId().toString() : UUID.randomUUID().toString();
+
+        // Consume armory stock if available
+        if (settlement != null) {
+            VillageArmoryManager.ArmoryStock armory = VillageArmoryManager.get().getStock(settlement);
+            if (isArcher && armory.hasArcherGear()) {
+                armory.consumeArcherGear();
+            } else if (!isArcher && armory.hasMeleeGuardGear()) {
+                armory.consumeMeleeGuardGear();
+            }
+        }
+
+        if (isArcher) {
+            VillageArcherEntity archer = LivingWorldEntities.VILLAGE_ARCHER.create(level, EntitySpawnReason.COMMAND);
+            if (archer != null) {
+                archer.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+                archer.setHomeSettlementId(settlementId);
+                archer.setCustomName(Component.literal("§9[Archer Recruit] Alden"));
+                archer.setCustomNameVisible(true);
+                AllegianceRegistry.get().register(archer.getUUID(), settlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.ARCHER);
+                level.addFreshEntity(archer);
+                level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_IRON.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
+                level.sendParticles(ParticleTypes.ENCHANTED_HIT, pos.getX() + 0.5, pos.getY() + 1.2, pos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
+                if (settlement != null) settlement.setGuardCount(settlement.getGuardCount() + 1);
+                return true;
+            }
+        } else {
+            VillageGuardEntity guard = LivingWorldEntities.VILLAGE_GUARD.create(level, EntitySpawnReason.COMMAND);
+            if (guard != null) {
+                guard.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+                guard.setHomeSettlementId(settlementId);
+                GuardRecord record = new GuardRecord(guard.getUUID(), settlement != null ? settlement.getId() : UUID.randomUUID(), "Gareth", GuardRank.RECRUIT);
+                guardRecords.put(guard.getUUID(), record);
+                guard.setCustomName(Component.literal("§9[Guard Recruit] Gareth"));
+                guard.setCustomNameVisible(true);
+                AllegianceRegistry.get().register(guard.getUUID(), settlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.MELEE_GUARD);
+                level.addFreshEntity(guard);
+                level.playSound(null, pos, SoundEvents.ARMOR_EQUIP_IRON.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
+                level.sendParticles(ParticleTypes.ENCHANTED_HIT, pos.getX() + 0.5, pos.getY() + 1.2, pos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
+                if (settlement != null) settlement.setGuardCount(settlement.getGuardCount() + 1);
+                return true;
+            }
+        }
+        return false;
     }
 
     public void clear() {

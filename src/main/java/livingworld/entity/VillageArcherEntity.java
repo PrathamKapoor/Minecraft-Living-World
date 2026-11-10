@@ -1,10 +1,16 @@
 package livingworld.entity;
 
 import java.util.EnumSet;
+import java.util.List;
+import livingworld.faction.AllegianceRegistry;
+import livingworld.faction.VillageDefenseController;
+import livingworld.settlement.Settlement;
+import livingworld.settlement.SettlementManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -30,26 +36,32 @@ import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Dedicated Village Archer / Bow Guard Unit (Section 10, F05 & Quality Rebuild).
+ * Dedicated Village Archer / Bow Guard Unit (Section 10, F05; v0.2.5 Living Village Rebuild).
  * Enforces ranged defense perimeter around settlements and elevated watchtowers:
  * - Wields Bow and Arrow with full 3D visible iron/diamond armor
  * - Tactical kiting AI maintaining standoff distance from melee threats
  * - Authentic bow drawing stance with startUsingItem(MAIN_HAND) and visible arrow releases
- * - Elevation defense prioritizing high ground / walls / towers
- * - Golem support fire coordinating suppressing attacks on hostile monsters
+ * - Elevation defense and early-warning watchtower sentry reconnaissance
+ * - Centralized allegiance eliminating friendly-fire with melee guards and golems
  */
 public class VillageArcherEntity extends PathfinderMob implements RangedAttackMob {
     private VillageGuardEntity.GuardRank rank = VillageGuardEntity.GuardRank.SOLDIER;
     private String homeSettlementId = "";
+    private boolean isWatchtowerSentry = false;
 
     public VillageArcherEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
         equipStandardArcherGear();
         this.setCustomName(Component.literal("§9Village Archer"));
         this.setCustomNameVisible(false);
+
+        if (!level.isClientSide()) {
+            AllegianceRegistry.get().register(this.getUUID(), homeSettlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.ARCHER);
+        }
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -57,7 +69,7 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
             .add(Attributes.MAX_HEALTH, 28.0)
             .add(Attributes.MOVEMENT_SPEED, 0.28)
             .add(Attributes.ATTACK_DAMAGE, 4.0)
-            .add(Attributes.FOLLOW_RANGE, 30.0)
+            .add(Attributes.FOLLOW_RANGE, 48.0) // Expanded 48-block perception range
             .add(Attributes.ARMOR, 15.0)
             .add(Attributes.ARMOR_TOUGHNESS, 2.0);
     }
@@ -97,26 +109,59 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
         this.goalSelector.addGoal(0, new FloatGoal(this));
         // Tactical Kiting Goal: backs away if target closes within 5 blocks
         this.goalSelector.addGoal(1, new TacticalKitingGoal(this, 1.25, 5.0));
+        // Settlement Defense Rally: moves towards alarm coordinate if not in active combat
+        this.goalSelector.addGoal(2, new DefendSettlementGoal(this));
         // Authentic Bow Combat Goal: manages bow draw, aiming, and tension curves
-        this.goalSelector.addGoal(2, new VillageArcherBowAttackGoal(this, 1.0, 25, 24.0f));
+        this.goalSelector.addGoal(3, new VillageArcherBowAttackGoal(this, 1.0, 25, 32.0f));
+        // Watchtower Sentry Lookout Goal: scans 48 blocks for hostiles and alerts settlement
+        this.goalSelector.addGoal(4, new SentryLookoutGoal(this));
         this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.7));
         this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0f));
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 
-        this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
+        // Retaliate only against non-allied hostiles (friendly-fire filtering)
+        this.targetSelector.addGoal(1, new HurtByTargetGoal(this) {
+            @Override
+            public boolean canUse() {
+                if (!super.canUse()) return false;
+                LivingEntity attacker = VillageArcherEntity.this.getLastHurtByMob();
+                return attacker != null && !AllegianceRegistry.get().areAllies(VillageArcherEntity.this, attacker);
+            }
+        });
+
         // Priority 2: Prioritize mutant threats from high ground / range
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, false,
             (target, level) -> {
                 if (target == null) return false;
+                if (AllegianceRegistry.get().areAllies(this, target)) return false;
                 Identifier id = BuiltInRegistries.ENTITY_TYPE.getKey(target.getType());
                 return (id != null && "mutantmonsters".equals(id.getNamespace())) || target instanceof MutantZombieCommanderEntity;
             }));
-        // Priority 3: Prioritize monsters actively attacking Iron Golems or villagers
-        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, true));
+
+        // Priority 3: Prioritize monsters threatening settlement
+        this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Monster.class, 10, true, false,
+            (target, level) -> target != null && !AllegianceRegistry.get().areAllies(this, target)));
+    }
+
+    @Override
+    public boolean canAttack(LivingEntity target) {
+        if (target == null) return false;
+        if (AllegianceRegistry.get().areAllies(this, target)) return false;
+        return super.canAttack(target);
+    }
+
+    @Override
+    public void setTarget(LivingEntity target) {
+        if (target != null && AllegianceRegistry.get().areAllies(this, target)) {
+            return; // Reject friendly allied target assignment
+        }
+        super.setTarget(target);
     }
 
     @Override
     public void performRangedAttack(LivingEntity target, float pullProgress) {
+        if (target == null || AllegianceRegistry.get().areAllies(this, target)) return;
+
         ItemStack bow = this.getMainHandItem();
         ItemStack arrow = new ItemStack(Items.ARROW);
         AbstractArrow projectile = ProjectileUtil.getMobArrow(this, arrow, pullProgress, bow);
@@ -142,6 +187,22 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
 
     public void setHomeSettlementId(String homeSettlementId) {
         this.homeSettlementId = homeSettlementId;
+        if (homeSettlementId != null && !homeSettlementId.isEmpty() && !this.level().isClientSide()) {
+            AllegianceRegistry.get().register(this.getUUID(), homeSettlementId, "VILLAGE_ALLIANCE",
+                isWatchtowerSentry ? AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY : AllegianceRegistry.MilitaryRole.ARCHER);
+        }
+    }
+
+    public boolean isWatchtowerSentry() {
+        return isWatchtowerSentry;
+    }
+
+    public void setWatchtowerSentry(boolean watchtowerSentry) {
+        this.isWatchtowerSentry = watchtowerSentry;
+        if (this.homeSettlementId != null && !this.homeSettlementId.isEmpty() && !this.level().isClientSide()) {
+            AllegianceRegistry.get().register(this.getUUID(), homeSettlementId, "VILLAGE_ALLIANCE",
+                watchtowerSentry ? AllegianceRegistry.MilitaryRole.WATCHTOWER_SENTRY : AllegianceRegistry.MilitaryRole.ARCHER);
+        }
     }
 
     /**
@@ -179,9 +240,81 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
     }
 
     /**
-     * Dedicated Bow Combat AI for Village Archer (v0.2.4).
+     * Sentry Early Warning Goal: Scans perimeter for hostiles and triggers goat horn alarms.
+     */
+    public static class SentryLookoutGoal extends Goal {
+        private final VillageArcherEntity archer;
+        private int scanCooldown = 0;
+
+        public SentryLookoutGoal(VillageArcherEntity archer) {
+            this.archer = archer;
+        }
+
+        @Override
+        public boolean canUse() {
+            return archer.isAlive() && archer.level() instanceof ServerLevel;
+        }
+
+        @Override
+        public void tick() {
+            if (++scanCooldown < 20) return; // Scan once per second
+            scanCooldown = 0;
+
+            if (!(archer.level() instanceof ServerLevel serverLevel)) return;
+            Settlement settlement = SettlementManager.get().getNearestSettlement(archer.blockPosition());
+            if (settlement == null) return;
+
+            AABB scanArea = AABB.ofSize(archer.position(), 64, 24, 64);
+            List<Monster> spottedHostiles = serverLevel.getEntitiesOfClass(Monster.class, scanArea,
+                m -> m.isAlive() && !AllegianceRegistry.get().isVillageDefender(m));
+
+            if (!spottedHostiles.isEmpty()) {
+                Monster threat = spottedHostiles.get(0);
+                VillageDefenseController.SettlementDefenseState state = VillageDefenseController.get().getState(settlement.getId());
+                if (state.getThreatLevel() == VillageDefenseController.ThreatLevel.PEACEFUL || state.getThreatLevel() == VillageDefenseController.ThreatLevel.SUSPICIOUS) {
+                    VillageDefenseController.get().reportThreat(serverLevel, settlement, threat.blockPosition(), threat, "Sentry Early-Warning Contact");
+                }
+            }
+        }
+    }
+
+    /**
+     * Settlement Defense Rally Goal: Guides archer toward elevated defense positions when village is attacked.
+     */
+    public static class DefendSettlementGoal extends Goal {
+        private final PathfinderMob mob;
+
+        public DefendSettlementGoal(PathfinderMob mob) {
+            this.mob = mob;
+            this.setFlags(EnumSet.of(Flag.MOVE));
+        }
+
+        @Override
+        public boolean canUse() {
+            if (mob.getTarget() != null && mob.getTarget().isAlive()) return false;
+            if (!(mob.level() instanceof ServerLevel)) return false;
+            Settlement settlement = SettlementManager.get().getNearestSettlement(mob.blockPosition());
+            if (settlement == null) return false;
+            VillageDefenseController.SettlementDefenseState state = VillageDefenseController.get().getState(settlement.getId());
+            return state.getThreatLevel() == VillageDefenseController.ThreatLevel.UNDER_ATTACK && state.getActiveThreatPos() != null;
+        }
+
+        @Override
+        public void tick() {
+            Settlement settlement = SettlementManager.get().getNearestSettlement(mob.blockPosition());
+            if (settlement != null) {
+                VillageDefenseController.SettlementDefenseState state = VillageDefenseController.get().getState(settlement.getId());
+                BlockPos threatPos = state.getActiveThreatPos();
+                if (threatPos != null) {
+                    mob.getNavigation().moveTo(threatPos.getX(), threatPos.getY(), threatPos.getZ(), 1.2);
+                }
+            }
+        }
+    }
+
+    /**
+     * Dedicated Bow Combat AI for Village Archer (v0.2.4 & v0.2.5).
      * Replaces generic RangedAttackGoal with authentic bow drawing, aiming, and release mechanics.
-     * Manages startUsingItem(MAIN_HAND) so client renders true bow tension curves.
      */
     public static class VillageArcherBowAttackGoal extends Goal {
         private final VillageArcherEntity archer;

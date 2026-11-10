@@ -1,21 +1,74 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-10T13:05:00Z
-- Active milestone/task: GitHub Repository Release & Sync — COMPLETED
-- Last known passing build: STEP 0019 (livingworld-0.2.4.jar with 68 classes, 263,113 bytes; 55/55 acceptance tests passed; 7/7 gameplay playtest scenarios passed; full 60s in-world Survival simulation passed with 0 errors across all 20 mods on NVIDIA RTX 4050 GPU)
-- Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`, Commit: `f8c21077fa0c26d08c2e123546715a5f5fcb85fb`)
-- Rollback Point Established: `backup_v0.2.4/livingworld-0.2.4.jar` (SHA256: 307A4C2E58C930E2E231150EBBDB2F5D7B6018EF470FF7D8F8819619B156CEDB)
+- UTC time: 2026-11-10T14:35:00Z
+- Active milestone/task: Version 0.2.5 The Living Village Update — COMPLETE
+- Last known passing build: STEP 0021 (livingworld-0.2.5.jar with 74 classes, 309,832 bytes; 63/63 acceptance tests passed; 7/7 gameplay playtest scenarios passed; 60s in-world Survival quickplay passed with 0 errors on NVIDIA RTX 4050 GPU)
+- Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
+- Rollback Point Established: `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
 - Prior Rollback Points:
+  - `backup_v0.2.4/livingworld-0.2.4.jar` (SHA256: 307A4C2E58C930E2E231150EBBDB2F5D7B6018EF470FF7D8F8819619B156CEDB)
   - `backup_v0.2.3/livingworld-0.2.3.jar` (SHA256: 2CAF4C7AC48EE44D0DDE1C7D0B7D28854A5893347D01576D1E7182D4341CEFBF)
   - `backup_v0.2.2/livingworld-0.2.2.jar` (SHA256: 2E79A77A764951F434F15AAF50F71F3DBDC51F8560215E9B73A2456E6F218B00)
   - `backup_v0.2.1/livingworld-0.2.1.jar` (SHA256: CB7A121B050601418FEDAC95AFC7C038468EC6A2C27C97A044774363CF1028A3)
   - `backup_v0.2.0/livingworld-0.2.0.jar` (SHA256: 96B73EBDB46B6624842469FE5884AE449ADC62D74FE9EED71D0EADA14014B4E0)
-- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.4.jar (263,113 bytes)
+- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.5.jar (309,832 bytes)
 - Integrated Dependencies: 20 active Fabric mods in `instances/LivingWorld/minecraft/mods/`
 - Files modified but unverified: None
 - Known blockers: None
-- NEXT ACTION: Stand ready for user gameplay instructions or feature requests.
+- NEXT ACTION: Commit and push changes to GitHub under `PrathamKapoor <prathamkapoor027@gmail.com>`.
+
+---
+
+## CHRONOLOGICAL JOURNAL
+
+### 2026-11-10T14:35:00Z — STEP 0021 — DONE
+Goal: Execute Version 0.2.5 The Living Village Update Directive: eliminate guard friendly-fire and internecine fighting; implement settlement-wide threat state machine with goat-horn alarm, defender rally, and civilian lockdown; extend archer follow range to 48m with watchtower sentry AI; implement balanced 13-profession village workforce engine; enforce authentic 2-block beds (FOOT + HEAD) across all residential buildings; expand architectural library to 24 distinct hand-crafted blueprints; implement physical village armory stockpiling; coordinate guard recruitment with armory gear; enable civilian support (cleric healing, golem repair, fletcher arrows); maintain doubled Iron Golem quotas and snow golem sentries; rebalance zombie horde attack damage and protect small settlements (< 8 villagers); implement accidental hit forgiveness and visitor hospitality; expand `/livingworld` command suite with 8 diagnostic commands; expand acceptance test suite to 63 tests; verify in running game world on NVIDIA RTX 4050 GPU; package and deploy `livingworld-0.2.5.jar`.
+Files:
+  - `src/main/java/livingworld/faction/AllegianceRegistry.java` (Created)
+  - `src/main/java/livingworld/faction/VillageDefenseController.java` (Created)
+  - `src/main/java/livingworld/economy/VillageWorkforceManager.java` (Created)
+  - `src/main/java/livingworld/economy/VillageArmoryManager.java` (Created)
+  - `src/main/java/livingworld/faction/CivilianSupportManager.java` (Created)
+  - `src/main/java/livingworld/faction/VillageGolemManager.java` (Created)
+  - `src/main/java/livingworld/entity/VillageGuardEntity.java` (Overhauled)
+  - `src/main/java/livingworld/entity/VillageArcherEntity.java` (Overhauled)
+  - `src/main/java/livingworld/faction/VillageGuardManager.java` (Updated)
+  - `src/main/java/livingworld/faction/ReputationManager.java` (Updated)
+  - `src/main/java/livingworld/settlement/Blueprint.java` (Updated)
+  - `src/main/java/livingworld/settlement/BlueprintRegistry.java` (Updated to 24 Blueprints)
+  - `src/main/java/livingworld/settlement/Settlement.java` (Updated)
+  - `src/main/java/livingworld/settlement/SettlementManager.java` (Updated)
+  - `src/main/java/livingworld/undead/ZombieHordeManager.java` (Updated)
+  - `src/main/java/livingworld/LivingWorldMod.java` (Updated)
+  - `src/main/java/livingworld/command/LivingWorldCommand.java` (Updated)
+  - `src/main/resources/fabric.mod.json` (Bumped to v0.2.5)
+  - `src/test/java/livingworld/LivingWorldTests.java` (Expanded to 63 tests)
+  - `src/test/java/livingworld/GameplayPlaytestRunner.java` (Updated)
+  - `scripts/build.ps1` (Updated)
+  - `instances/LivingWorld/minecraft/mods/livingworld-0.2.5.jar` (Deployed)
+  - `backup_v0.2.5/livingworld-0.2.5.jar` (Saved)
+  - `docs/COMMANDS.md`, `docs/FEATURE_MATRIX.md`, `decisions.md` (Updated)
+Action:
+1. Implemented `AllegianceRegistry` and hooked into `ServerLivingEntityEvents.ALLOW_DAMAGE`: completely eliminates friendly-fire damage and retaliation between allied guards, archers, golems, and civilians.
+2. Implemented `VillageDefenseController` state machine (`PEACEFUL -> SUSPICIOUS -> ALERT -> UNDER_ATTACK -> RECOVERY`), sounding goat horn alarm (25s cooldown), waking sleeping guards, and directing civilian lockdown.
+3. Overhauled `VillageGuardEntity` and `VillageArcherEntity` AI: expanded `FOLLOW_RANGE` to 48.0 blocks, filtered target selectors, added `DefendSettlementGoal`, and added watchtower `SentryLookoutGoal` scanning 48–64m perimeters.
+4. Implemented `VillageWorkforceManager` balancing all 13 vanilla professions with target distribution of 2 active adults per profession (26 total) and real economic output cycles.
+5. Implemented `VillageArmoryManager` tracking persistent equipment stock, consuming gear for recruits, and accepting player donations.
+6. Enforced authentic 2-block beds (`FOOT` + `HEAD`) in `Blueprint.java` and expanded `BlueprintRegistry` from 13 to 24 hand-crafted blueprints (added bakery, inn, armory, archer watchtower, stable, windmill, mason workshop, library, communal hall, training yard, cleric clinic).
+7. Implemented `CivilianSupportManager` (cleric healing, golem repair, fletcher arrows) and `VillageGolemManager` (doubled Iron Golem quotas, 2–4 Snow Golems in cold biomes).
+8. Rebalanced Zombie Horde attack damage (~10% nerf) and suppressed horde frequency near small villages (< 8 villagers).
+9. Implemented accidental hit forgiveness (2 hits tolerated) and friendly visitor greetings in `ReputationManager`.
+10. Registered 8 new debug/diagnostic commands under `/livingworld`.
+11. Expanded automated acceptance test suite from 55 to 63 tests (all 63 passed). Ran all 7 gameplay scenarios (all passed). Ran 60-second in-world Survival quickplay on NVIDIA RTX 4050 GPU (0 crashes, 0 errors).
+Command/test:
+  - `powershell -File .\scripts\build.ps1` -> packaged `livingworld-0.2.5.jar` (309,832 bytes).
+  - `powershell -File .\scripts\test.ps1` -> 63/63 tests passed (0 failed).
+  - `powershell -File .\scripts\test_gameplay.ps1` -> 7/7 scenarios passed (0 failed).
+  - `powershell -File .\scripts\test_quickplay_world.ps1` -> 60s Survival simulation completed with 0 errors.
+Evidence: All logs verified clean. Deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.5.jar`.
+Known issues: None.
+Next: Commit and push changes to GitHub under `PrathamKapoor <prathamkapoor027@gmail.com>`.
 
 ---
 

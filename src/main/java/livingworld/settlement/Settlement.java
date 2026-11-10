@@ -152,27 +152,64 @@ public class Settlement {
     }
 
     private void evaluateAutonomousExpansion(ServerLevel level) {
-        // 1. Expand housing if needed
+        Random rand = new Random(id.getMostSignificantBits() ^ level.getGameTime());
+
+        // 1. Expand housing if needed (diverse residential blueprints)
         if (population >= housingCapacity - 2) {
-            Blueprint bp = BlueprintRegistry.get("small_oak_house");
+            String[] residentialOptions = {"small_oak_house", "two_story_house", "farmhouse", "inn_guesthouse", "bakery"};
+            String chosen = residentialOptions[rand.nextInt(residentialOptions.length)];
+            Blueprint bp = BlueprintRegistry.get(chosen);
             if (bp != null && stockpile.hasAll(bp.getResourceCost())) {
                 BlockPos targetPos = findClearPlot(level, bp.getWidth(), bp.getDepth());
                 if (targetPos != null) {
                     stockpile.consumeAll(bp.getResourceCost());
-                    queueProject(new ConstructionProject("small_oak_house", targetPos));
-                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued small_oak_house at " + targetPos);
+                    queueProject(new ConstructionProject(chosen, targetPos));
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued residential " + chosen + " at " + targetPos);
+                    return;
                 }
             }
         }
         // 2. Expand agricultural food production
-        else if (stockpile.get(Stockpile.ResourceType.FOOD) <= 50) {
-            Blueprint bp = BlueprintRegistry.get("wheat_farm");
+        else if (stockpile.get(Stockpile.ResourceType.FOOD) <= 60) {
+            String[] foodOptions = {"wheat_farm", "livestock_pen", "barn", "bakery"};
+            String chosen = foodOptions[rand.nextInt(foodOptions.length)];
+            Blueprint bp = BlueprintRegistry.get(chosen);
             if (bp != null && stockpile.hasAll(bp.getResourceCost())) {
                 BlockPos targetPos = findClearPlot(level, bp.getWidth(), bp.getDepth());
                 if (targetPos != null) {
                     stockpile.consumeAll(bp.getResourceCost());
-                    queueProject(new ConstructionProject("wheat_farm", targetPos));
-                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued wheat_farm at " + targetPos);
+                    queueProject(new ConstructionProject(chosen, targetPos));
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued food infrastructure " + chosen + " at " + targetPos);
+                    return;
+                }
+            }
+        }
+        // 3. Expand defensive military infrastructure
+        else if (guardCount < 4) {
+            String[] militaryOptions = {"archer_watchtower", "armory", "barracks", "training_yard"};
+            String chosen = militaryOptions[rand.nextInt(militaryOptions.length)];
+            Blueprint bp = BlueprintRegistry.get(chosen);
+            if (bp != null && stockpile.hasAll(bp.getResourceCost())) {
+                BlockPos targetPos = findClearPlot(level, bp.getWidth(), bp.getDepth());
+                if (targetPos != null) {
+                    stockpile.consumeAll(bp.getResourceCost());
+                    queueProject(new ConstructionProject(chosen, targetPos));
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued defense structure " + chosen + " at " + targetPos);
+                    return;
+                }
+            }
+        }
+        // 4. Civic & Industrial Workshops
+        else {
+            String[] civicOptions = {"workshop", "mason_workshop", "windmill", "library", "communal_hall", "cleric_clinic"};
+            String chosen = civicOptions[rand.nextInt(civicOptions.length)];
+            Blueprint bp = BlueprintRegistry.get(chosen);
+            if (bp != null && stockpile.hasAll(bp.getResourceCost())) {
+                BlockPos targetPos = findClearPlot(level, bp.getWidth(), bp.getDepth());
+                if (targetPos != null) {
+                    stockpile.consumeAll(bp.getResourceCost());
+                    queueProject(new ConstructionProject(chosen, targetPos));
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Autonomous expansion: Village " + name + " queued civic workshop " + chosen + " at " + targetPos);
                 }
             }
         }
@@ -263,12 +300,19 @@ public class Settlement {
 
     private void onProjectFinished(ConstructionProject project) {
         String bpId = project.getBlueprintId();
-        if ("small_oak_house".equals(bpId)) {
-            housingCapacity += 4;
-        } else if ("wheat_farm".equals(bpId)) {
-            stockpile.add(Stockpile.ResourceType.FOOD, 20);
-        } else if ("watchtower".equals(bpId)) {
-            guardCount += 2;
+        Blueprint bp = BlueprintRegistry.get(bpId);
+        if (bp != null) {
+            int beds = bp.getBedCount();
+            if (beds > 0) {
+                housingCapacity += beds * 2; // Each valid bed accommodates demographic expansion
+            }
+            if ("wheat_farm".equals(bpId) || "bakery".equals(bpId) || "barn".equals(bpId)) {
+                stockpile.add(Stockpile.ResourceType.FOOD, 25);
+            } else if ("watchtower".equals(bpId) || "archer_watchtower".equals(bpId)) {
+                guardCount += 2;
+            } else if ("armory".equals(bpId)) {
+                stockpile.add(Stockpile.ResourceType.IRON, 15);
+            }
         }
     }
 

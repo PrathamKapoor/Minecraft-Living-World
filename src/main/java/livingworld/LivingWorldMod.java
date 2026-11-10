@@ -67,7 +67,7 @@ public class LivingWorldMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.4 for Minecraft 26.3 (Java 25)");
+        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.5 for Minecraft 26.3 (Java 25)");
 
         // 1. Initialize Configuration
         File configFile = FabricLoader.getInstance().getConfigDir().resolve("livingworld.json").toFile();
@@ -128,8 +128,19 @@ public class LivingWorldMod implements ModInitializer {
             }
         });
 
-        // 6. Register Animal & Golem Protection and Livestock Infection Hook
+        // 6. Register Animal & Golem Protection, Friendly-Fire Filtering and Livestock Infection Hook
         ServerLivingEntityEvents.ALLOW_DAMAGE.register((victim, source, amount) -> {
+            // Centralized Allegiance & Friendly-Fire Cancellation (Section 2, v0.2.5 Living Village Rebuild)
+            if (livingworld.faction.AllegianceRegistry.get().shouldCancelFriendlyFire(victim, source)) {
+                if (victim instanceof net.minecraft.world.entity.Mob mobVictim) {
+                    livingworld.faction.AllegianceRegistry.get().sanitizeDefenderTarget(mobVictim);
+                }
+                if (source.getEntity() instanceof net.minecraft.world.entity.Mob mobAttacker) {
+                    livingworld.faction.AllegianceRegistry.get().sanitizeDefenderTarget(mobAttacker);
+                }
+                return false; // Zero allied friendly-fire damage!
+            }
+
             // Protect player pets/named animals from monster damage
             if (source.getEntity() instanceof Monster && ProtectionManager.get().isProtectedAnimal(victim)) {
                 return false;
@@ -140,6 +151,14 @@ public class LivingWorldMod implements ModInitializer {
                 if (victim.getHealth() - amount <= 0.0f) {
                     InfectionManager.get().tryConvertLivestock(sl, animal, zombie);
                 }
+            }
+
+            // Guard accidental hit forgiveness
+            if ((victim instanceof livingworld.entity.VillageGuardEntity || victim instanceof livingworld.entity.VillageArcherEntity)
+                && victim instanceof net.minecraft.world.entity.Mob guardMob && source.getEntity() instanceof ServerPlayer player) {
+                BlockPos pos = victim.blockPosition();
+                Settlement settlement = SettlementManager.get().getSettlementAt(pos);
+                return ReputationManager.get().handleGuardHit(player, guardMob, settlement);
             }
 
             // Golem accidental hit forgiveness (F05)
@@ -270,11 +289,17 @@ public class LivingWorldMod implements ModInitializer {
                     SwiftMountTraversalManager.get().tickTraversal(serverLevel);
                     RaidTactics.get().tickRaidTactics(serverLevel);
 
-                    // Track player exploration, emergency support & mineshaft cues
+                    // Track player exploration, emergency support, visitor greetings & mineshaft cues
                     for (ServerPlayer player : serverLevel.players()) {
                         ReputationManager.get().checkRaidSupport(player, serverTicks);
                         GlobalMapManager.get().recordPlayerMovement(player);
                         ExplorationManager.get().checkMineshaftEncounters(serverLevel, player, serverTicks);
+                        if (serverTicks % 40 == 0) {
+                            Settlement s = SettlementManager.get().getSettlementAt(player.blockPosition());
+                            if (s != null) {
+                                ReputationManager.get().welcomeVisitor(player, s);
+                            }
+                        }
                     }
                 } else if (serverLevel.dimension() == Level.NETHER) {
                     PiglinTribeManager.get().tickTribalSkirmishes(serverLevel);

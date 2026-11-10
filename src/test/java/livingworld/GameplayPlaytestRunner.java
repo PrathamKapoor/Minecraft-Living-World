@@ -145,7 +145,10 @@ public class GameplayPlaytestRunner {
         assertNotNull(BuiltInRegistries.ENTITY_TYPE.get(Identifier.parse("livingworld:end_void_stalker")), "End void stalker entity registered");
 
         // Verify texture assets exist on disk in mod jar
-        File jarFile = new File("build/libs/livingworld-0.1.0.jar");
+        File jarFile = new File("build/libs/livingworld-0.2.5.jar");
+        if (!jarFile.exists()) {
+            jarFile = new File("instances/LivingWorld/minecraft/mods/livingworld-0.2.5.jar");
+        }
         assertTrue(jarFile.exists(), "Built mod jar exists");
 
         List<String> requiredTextures = List.of(

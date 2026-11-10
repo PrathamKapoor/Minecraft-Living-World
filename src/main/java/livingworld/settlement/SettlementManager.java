@@ -45,6 +45,23 @@ public class SettlementManager {
         return null;
     }
 
+    public Settlement getNearestSettlement(BlockPos pos) {
+        Settlement atPos = getSettlementAt(pos);
+        if (atPos != null) {
+            return atPos;
+        }
+        Settlement nearest = null;
+        double nearestDistSq = Double.MAX_VALUE;
+        for (Settlement s : settlements.values()) {
+            double distSq = s.getCenter().distSqr(pos);
+            if (distSq < nearestDistSq) {
+                nearestDistSq = distSq;
+                nearest = s;
+            }
+        }
+        return nearest;
+    }
+
     public Settlement getOrCreateSettlement(BlockPos pos, String defaultName, FactionType factionType) {
         Settlement existing = getSettlementAt(pos);
         if (existing != null) {
@@ -161,9 +178,16 @@ public class SettlementManager {
                 livingworld.economy.EconomyManager.get().tickLogistics(level, settlement);
                 livingworld.settlement.NaturalBreedingManager.get().tickSettlementDemographics(level, settlement);
             }
+            if (currentTicks % 60 == 0) {
+                livingworld.economy.VillageWorkforceManager.get().tickWorkforce(level, settlement);
+                livingworld.faction.VillageGolemManager.get().tickGolems(level, settlement);
+                livingworld.faction.CivilianSupportManager.get().tickCivilianSupport(level, settlement);
+            }
             if (currentTicks % 100 == 0) {
                 livingworld.faction.VillageGuardManager.get().tickGuardRecruitment(level, settlement);
             }
+            // Continuous Threat & Defense Controller tick
+            livingworld.faction.VillageDefenseController.get().tickDefense(level, settlement);
         }
 
         // Periodic checkpoint to disk (every 15 seconds)

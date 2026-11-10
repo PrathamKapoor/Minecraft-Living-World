@@ -108,3 +108,27 @@ All Living World commands are registered under the root `/livingworld` command t
 | Command | Permission | Description |
 |---|---|---|
 | `/livingworld debug visual catalog` | All | Outputs the comprehensive visual catalog of hand-crafted architectural blueprints (Palace, Watchtower, Cottage, Barracks, Gatehouse, Market, Workshop, Barn, Warehouse) and custom 3D mob models (Mutant Commander, Shark, Gargoyle, Zombie Livestock, End Void Stalker, Village Archer). |
+
+---
+
+## 7. Version 0.2.5 Living Village & Autonomous Defense Commands
+
+### Village Defense & Alarm Control
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld defense status` | All | Displays current threat level (Peaceful, Suspicious, Alert, Under Attack, Recovery), lockdown status, active hostile count, primary threat, active sentries, and horn cooldown for the local settlement. |
+| `/livingworld defense alarm <on\|off>` | OP (Level 2) | Manually triggers a settlement-wide tactical goat horn alarm (rallying defenders, waking sleeping soldiers, ordering civilian lockdown) or silences the alarm and clears active threats. |
+| `/livingworld defense sentries` | All | Lists all active archery watchtower sentries, their coordinates, health, and perimeter sightline targets (48–64 blocks). |
+
+### Military Allegiance & Recruitment
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld military allegiance` | All | Displays registered village defenders count, active friendly-fire cancellation status (0 damage between allied guards, archers, golems, civilians), and the complete ally matrix. |
+| `/livingworld military recruit <melee\|archer>` | OP (Level 2) | Force-recruits an authentic Village Guard or Village Archer for the local settlement, equipping them from Armory stock with armor, weapons, and visible enlistment ceremony. |
+
+### Armory, Professions & Golems
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld armory stock` | All | Displays physical armory inventory (iron/diamond swords, bows, arrows, shields, armor pieces, splash healing potions) and gear availability for new recruits. |
+| `/livingworld professions list` | All | Displays the complete 13-profession demographic census (Farmer, Fisherman, Fletcher, Shepherd, Butcher, Leatherworker, Librarian, Cartographer, Cleric, Armorer, Weaponsmith, Toolsmith, Mason) with staffed/deficit statuses. |
+| `/livingworld golems status` | All | Displays active Iron Golem and Snow Golem defense forces, calculated quotas, climate conditions, and health status for the settlement. |

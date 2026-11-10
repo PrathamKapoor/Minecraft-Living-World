@@ -321,3 +321,59 @@ Verification:
   - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
   - 60-second in-world survival simulation passed with 0 errors across all 20 active mods on NVIDIA RTX 4050 GPU (`scripts/test_quickplay_world.ps1`).
 Revisit trigger: Additional armor trim rendering or custom animated shield heraldry.
+
+---
+
+## DEC-0017 — The Living Village Update: Autonomous Civilizations, Organized Defense & Functional Professions
+Date: 2026-11-10T14:25:00Z
+Status: accepted
+Context: Playtesting of v0.2.4 revealed critical systemic issues in village defense and demographic simulation:
+  1. Internecine guard friendly-fire: Melee guards and archers fought each other due to stray arrow damage triggering vanilla `HurtByTargetGoal`.
+  2. Sleeping/inactive guards during attacks: Soldiers remained asleep or unalert during nighttime raids.
+  3. Disconnected tick scheduler: `tickGuardRecruitment` and `tickSettlementDemographics` were defined in managers but never invoked in `ServerTickEvents.END_LEVEL_TICK` or `SettlementManager.tick`.
+  4. Non-functional half-beds: `addBlock` placed single `Blocks.BED` halves without matching `HEAD` or `FOOT` parts, breaking POI assignment, pathfinding, and villager breeding.
+  5. Workforce deficit & economic passivity: Villages lacked structured profession balance across all 13 vanilla professions and had no physical armories.
+  6. Repetitive architecture: Building generation was limited to a few blueprints, causing repetitive stacked towers.
+Decision:
+  1. Implement `AllegianceRegistry` (`livingworld.faction.AllegianceRegistry`):
+     - Tracks all settlement defenders (guards, archers, sentries, iron golems, snow golems, civilians) under unified community allegiance.
+     - Intercepts `ServerLivingEntityEvents.ALLOW_DAMAGE` to zero out allied projectile and melee friendly-fire.
+     - Sanitizes defender targets, clearing accidental target acquisitions against allies.
+  2. Implement `VillageDefenseController` (`livingworld.faction.VillageDefenseController`):
+     - State machine: `PEACEFUL -> SUSPICIOUS -> ALERT -> UNDER_ATTACK -> RECOVERY`.
+     - Sounds authentic goat-horn alarm (`SoundEvents.GOAT_HORN_SOUND_VARIANTS[0]` / `SoundEvents.RAID_HORN`) with 25-second cooldown.
+     - Awakens sleeping guards via `stopSleeping()`, rallies defenders to threat coordinates, and directs civilians into indoor lockdown.
+  3. Overhaul Guard & Archer AI (`VillageGuardEntity.java`, `VillageArcherEntity.java`):
+     - Expanded `FOLLOW_RANGE` to 48.0 blocks for early-warning threat detection.
+     - Replaced vanilla `HurtByTargetGoal` with allied-filtered versions preventing friendly-fire retaliation.
+     - Overrode `canAttack` and `setTarget` to strictly reject allied defenders.
+     - Added `DefendSettlementGoal` and watchtower `SentryLookoutGoal` scanning 48–64m perimeters.
+  4. Implement `VillageWorkforceManager` (`livingworld.economy.VillageWorkforceManager`):
+     - Manages all 13 vanilla professions (Farmer, Fisherman, Fletcher, Shepherd, Butcher, Leatherworker, Librarian, Cartographer, Cleric, Armorer, Weaponsmith, Toolsmith, Mason).
+     - Promotes unemployed adults to deficit professions toward a baseline of 2 per profession (26 working adults).
+     - Generates tangible economic production: food, stone, armory equipment, arrows, and medicine into settlement stockpiles.
+  5. Implement `VillageArmoryManager` (`livingworld.economy.VillageArmoryManager`):
+     - Persistent `ArmoryStock` tracking physical swords, bows, arrows, shields, armor, and splash healing potions.
+     - Enforces gear consumption for recruits; accepts player donations rewarding +5 reputation.
+  6. Enforce Authentic Two-Block Beds & Expand to 24 Blueprints (`Blueprint.java`, `BlueprintRegistry.java`):
+     - Added `addBed` in `Blueprint` placing matching `FOOT` and `HEAD` parts with correct `Direction` and `BedBlock` states.
+     - Expanded library from 13 to 24 blueprints: added bakery, inn/guesthouse, armory, archer watchtower, stable, windmill, mason workshop, library, communal hall, training yard, and cleric clinic.
+  7. Implement `CivilianSupportManager` & `VillageGolemManager`:
+     - Working clerics heal wounded guards with armory potions and repair Iron Golems with stone; fletchers supply arrows.
+     - Maintains doubled Iron Golem quotas (1 per 8 villagers, min 2) and mobilizes 2–4 Snow Golems in cold/snowy biomes.
+  8. Rebalance Zombie Hordes & Accidental Hit Tolerance:
+     - Nerfed horde zombie attack damage by ~10% (armored ~4.5, miner ~3.6, regular ~2.7).
+     - Suppressed horde spawn frequency by 50% near small villages (< 8 villagers).
+     - Tolerates up to 2 accidental player hits before hostility, playing warning sounds and chat alerts.
+  9. Add 8 In-Game Diagnostic Commands under `/livingworld`:
+     - `/livingworld defense status`, `alarm <on|off>`, `sentries`.
+     - `/livingworld military allegiance`, `recruit <melee|archer>`.
+     - `/livingworld armory stock`, `/livingworld professions list`, `/livingworld golems status`.
+Rationale: Resolves every observed gameplay failure from the v0.2.4 playtest, eliminates internal guard combat, establishes realistic military and economic infrastructure, and elevates villages into living, autonomous societies.
+Trade-offs: Mod JAR packaged at 309,832 bytes across 74 compiled classes.
+Verification:
+  - 63/63 automated acceptance tests passed (`scripts/test.ps1`).
+  - 7/7 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - 60-second in-world Survival quickplay passed with 0 crashes, 0 errors, and stable 60 FPS on NVIDIA RTX 4050 GPU (`scripts/test_quickplay_world.ps1`).
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+Revisit trigger: Multi-settlement trade caravans or imperial tributary alliances.
