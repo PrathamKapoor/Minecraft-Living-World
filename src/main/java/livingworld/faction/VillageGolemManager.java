@@ -48,6 +48,9 @@ public class VillageGolemManager {
         for (IronGolem golem : currentIronGolems) {
             AllegianceRegistry.get().register(golem.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.IRON_GOLEM_DEFENDER);
             AllegianceRegistry.get().sanitizeDefenderTarget(golem);
+
+            // Water Recovery & Buoyancy Navigation Assist (BUG-11)
+            handleGolemWaterRecovery(level, golem, center);
         }
 
         if (currentIronGolems.size() < desiredIronGolems) {
@@ -111,5 +114,47 @@ public class VillageGolemManager {
             return true;
         }
         return level.getBiome(pos).value().getBaseTemperature() < 0.2f;
+    }
+
+    /**
+     * Golem Water Recovery & Buoyancy Assistance (BUG-11):
+     * Detects when an Iron Golem is submerged, applies buoyant impulse,
+     * navigates toward the closest dry shoreline within 16 blocks.
+     */
+    public void handleGolemWaterRecovery(ServerLevel level, IronGolem golem, BlockPos villageCenter) {
+        if (golem == null || !golem.isAlive() || level == null) return;
+        if (!golem.isInWater()) return;
+
+        // 1. Upward buoyancy impulse to allow swimming and step-ups
+        Vec3 delta = golem.getDeltaMovement();
+        golem.setDeltaMovement(delta.x, Math.max(0.12, delta.y + 0.08), delta.z);
+
+        // 2. Find closest dry, solid ground within 16 blocks
+        BlockPos golemPos = golem.blockPosition();
+        BlockPos nearestDry = null;
+        double bestDistSq = Double.MAX_VALUE;
+
+        for (int dx = -8; dx <= 8; dx++) {
+            for (int dz = -8; dz <= 8; dz++) {
+                for (int dy = -2; dy <= 4; dy++) {
+                    BlockPos p = golemPos.offset(dx, dy, dz);
+                    if (!level.getBlockState(p).is(net.minecraft.world.level.block.Blocks.WATER) &&
+                        !level.getBlockState(p.above()).is(net.minecraft.world.level.block.Blocks.WATER) &&
+                        level.getBlockState(p.below()).isSolid()) {
+                        double d = p.distSqr(golemPos);
+                        if (d < bestDistSq) {
+                            bestDistSq = d;
+                            nearestDry = p;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (nearestDry != null) {
+            golem.getNavigation().moveTo(nearestDry.getX() + 0.5, nearestDry.getY(), nearestDry.getZ() + 0.5, 1.25);
+        } else {
+            golem.getNavigation().moveTo(villageCenter.getX(), villageCenter.getY(), villageCenter.getZ(), 1.25);
+        }
     }
 }
