@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/zombie_cow_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}

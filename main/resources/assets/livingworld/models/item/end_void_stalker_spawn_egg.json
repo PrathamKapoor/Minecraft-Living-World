@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "layer0":  "livingworld:item/end_void_stalker_spawn_egg"
+                 },
+    "parent":  "minecraft:item/generated"
+}
