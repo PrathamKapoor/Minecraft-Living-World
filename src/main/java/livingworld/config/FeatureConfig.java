@@ -33,6 +33,9 @@ public class FeatureConfig {
     public boolean enableMinecartImprovements = true;     // F17
     public boolean enableGlobalMap = true;                // F18
     public boolean enableAccessibleEnchanting = true;     // F18 accessible enchanting
+    public boolean enableDimensionalScars = true;         // F19: Bidirectional Nether-Overworld Incursions
+    public int scarDefaultDiameter = 120;                 // F19: Default diameter (80 to 180 blocks)
+    public int scarRarityChunks = 128;                    // F19: 1 in 128 chunks average rarity
 
     // Version 0.2 Extended Configuration & Addendum Requirements
     public boolean zombieMiningEnabled = true;             // Addendum 2: Tool-wielding zombies & siege mining

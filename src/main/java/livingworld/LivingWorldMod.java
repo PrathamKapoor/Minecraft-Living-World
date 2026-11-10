@@ -67,7 +67,7 @@ public class LivingWorldMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.5 for Minecraft 26.3 (Java 25)");
+        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.6 for Minecraft 26.3 (Java 25)");
 
         // 1. Initialize Configuration
         File configFile = FabricLoader.getInstance().getConfigDir().resolve("livingworld.json").toFile();
@@ -231,6 +231,11 @@ public class LivingWorldMod implements ModInitializer {
                 }
                 livingworld.settlement.VillagerIdentityManager.get().getOrCreateProfile(villager, settlement);
             }
+        });
+
+        // 8b. Natural Dimensional Scars Chunk Load Hook (Feature F19)
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register((serverLevel, chunk, isNew) -> {
+            livingworld.worldgen.DimensionalScarManager.get().onChunkLoad(serverLevel, chunk.getPos());
         });
 
         // 9. Server Lifecycle: World Save & Load Hooks
