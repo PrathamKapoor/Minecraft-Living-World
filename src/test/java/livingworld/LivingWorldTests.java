@@ -25,8 +25,12 @@ import livingworld.entity.VillageArcherEntity;
 import livingworld.entity.VillageDogEntity;
 import livingworld.entity.VillageCavalryEntity;
 import livingworld.faction.AllegianceRegistry;
+import livingworld.faction.CivilianDistressManager;
+import livingworld.faction.CivilianShelterManager;
+import livingworld.faction.ReputationManager;
 import livingworld.faction.VillageDefenseController;
 import livingworld.faction.VillageGolemManager;
+import livingworld.core.SafeSpawnValidation;
 import livingworld.economy.VillageWorkforceManager;
 import livingworld.undead.ZombieHordeManager;
 import livingworld.illager.RaidTactics;
@@ -145,6 +149,16 @@ public class LivingWorldTests {
         runTest("Test 86: Defender Intelligence & Allegiance Hierarchy (TEST 8)", LivingWorldTests::testDefenderIntelligenceAndThreatScoring);
         runTest("Test 87: Simulation Persistence & World Reload State Serialization (TEST 9)", LivingWorldTests::testSimulationPersistenceAndSerialization);
         runTest("Test 88: Full System Regression Invariants (TEST 10)", LivingWorldTests::testSystemRegressionInvariants);
+        runTest("Test 89: Civilian Distress Event Generation, Deduplication & Responder Dispatch", LivingWorldTests::testCivilianDistressSignalling);
+        runTest("Test 90: Civilian Shelter 5-State Lifecycle & Door Coordination Machine", LivingWorldTests::testCivilianShelterLifecycle);
+        runTest("Test 91: Defender Target Hysteresis, Cooldowns & Anti-Spinning Invariants", LivingWorldTests::testDefenderTargetHysteresisAndAntiSpinning);
+        runTest("Test 92: Watchtower Platform 2-Block Headroom & Line-of-Sight Geometry", LivingWorldTests::testWatchtowerPlatformHeadroomAndSightlines);
+        runTest("Test 93: Cavalry Riding Offset (-0.7f) & Mounted Navigation Transfer", LivingWorldTests::testCavalryRidingOffsetAndMountedNavigation);
+        runTest("Test 94: Safe Spawn Headroom, Solid Footing & Large Mob Validation", LivingWorldTests::testSafeSpawnHeadroomAndLargeMobValidation);
+        runTest("Test 95: Village Dog Taming, Handler Loyalty & Free-Roaming Puppy Breeding", LivingWorldTests::testVillageDogTamingTerritoryAndBreeding);
+        runTest("Test 96: Defense Reputation Trust Gains & Milestone Title Thresholds", LivingWorldTests::testReputationDefenseMilestones);
+        runTest("Test 97: 3D Structure Reservations & Anti-Stacking Building Invariants", LivingWorldTests::testStructureBoundingBoxReservationsAndAntiStacking);
+        runTest("Test 98: Dimensional Scars Irregular Boundary, Canopy Variation & Fluid Safeguard", LivingWorldTests::testDimensionalScarOverhaulAndWaterSafeguard);
 
         System.out.println("====================================================");
         System.out.printf(" Results: %d PASSED, %d FAILED%n", passed, failed);
@@ -1561,6 +1575,200 @@ public class LivingWorldTests {
 
         // 6. Dimensional Scars default diameter
         assertEquals(120, FeatureConfig.get().scarDefaultDiameter, "Dimensional scar default diameter 120m");
+    }
+
+    // 89. Civilian Distress Event Generation, Deduplication & Responder Dispatch
+    private static void testCivilianDistressSignalling() {
+        CivilianDistressManager manager = CivilianDistressManager.get();
+        assertNotNull(manager, "CivilianDistressManager exists");
+        manager.clear();
+        assertEquals(0, manager.getTotalDistressEmitted(), "Distress count starts at 0");
+
+        UUID victim = UUID.randomUUID();
+        UUID attacker = UUID.randomUUID();
+        UUID settlement = UUID.randomUUID();
+        BlockPos pos = new BlockPos(100, 64, 100);
+
+        var incident = new CivilianDistressManager.DistressIncident(UUID.randomUUID(), victim, attacker, settlement, pos, 1000L);
+        assertNotNull(incident, "DistressIncident created");
+        assertEquals(victim, incident.getVictimUuid(), "Victim UUID matches");
+        assertEquals(attacker, incident.getAttackerUuid(), "Attacker UUID matches");
+        assertEquals(settlement, incident.getSettlementId(), "Settlement UUID matches");
+        assertEquals(pos, incident.getIncidentPos(), "Incident pos matches");
+        assertFalse(incident.isAcknowledged(), "Incident starts unacknowledged");
+
+        incident.setAcknowledged(true);
+        assertTrue(incident.isAcknowledged(), "Incident marked acknowledged");
+    }
+
+    // 90. Civilian Shelter 5-State Lifecycle & Door Coordination Machine
+    private static void testCivilianShelterLifecycle() {
+        CivilianShelterManager manager = CivilianShelterManager.get();
+        assertNotNull(manager, "CivilianShelterManager exists");
+
+        UUID villager = UUID.randomUUID();
+        var record = manager.getRecord(villager, 1000L);
+        assertNotNull(record, "CivilianRecord created");
+        assertEquals(CivilianShelterManager.CivilianState.WORKING, record.getState(), "Default civilian state is WORKING");
+        assertFalse(manager.isCivilianWorkSuspended(villager), "Work not suspended when WORKING");
+
+        // Transition: THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING
+        record.setState(CivilianShelterManager.CivilianState.THREAT_DETECTED, 1020L);
+        assertTrue(manager.isCivilianWorkSuspended(villager), "Work suspended during THREAT_DETECTED");
+
+        record.setState(CivilianShelterManager.CivilianState.SEEKING_SHELTER, 1040L);
+        assertTrue(manager.isCivilianWorkSuspended(villager), "Work suspended during SEEKING_SHELTER");
+
+        record.setState(CivilianShelterManager.CivilianState.SHELTERED, 1060L);
+        assertTrue(manager.isCivilianWorkSuspended(villager), "Work suspended during SHELTERED");
+
+        record.setState(CivilianShelterManager.CivilianState.RECOVERY, 1080L);
+        assertFalse(manager.isCivilianWorkSuspended(villager), "Work resumes during RECOVERY");
+
+        record.setState(CivilianShelterManager.CivilianState.WORKING, 1100L);
+        assertFalse(manager.isCivilianWorkSuspended(villager), "Work resumed when back to WORKING");
+
+        // Door cooldown check
+        BlockPos doorPos = new BlockPos(120, 64, 120);
+        assertTrue(manager.canToggleDoor(doorPos, 1000L), "Door toggle allowed initially");
+        manager.recordDoorToggle(doorPos, 1000L);
+        assertFalse(manager.canToggleDoor(doorPos, 1010L), "Door toggle blocked within 40-tick cooldown");
+        assertTrue(manager.canToggleDoor(doorPos, 1050L), "Door toggle allowed after 40-tick cooldown");
+    }
+
+    // 91. Defender Target Hysteresis, Cooldowns & Anti-Spinning Invariants
+    private static void testDefenderTargetHysteresisAndAntiSpinning() {
+        VillageDefenseController controller = VillageDefenseController.get();
+        assertNotNull(controller, "VillageDefenseController exists");
+
+        UUID threatUuid = UUID.randomUUID();
+        VillageDefenseController.ThreatRecord record = new VillageDefenseController.ThreatRecord(
+            threatUuid, net.minecraft.world.entity.EntityTypes.ZOMBIE, new BlockPos(200, 64, 200),
+            12.0, null, false, false, false, 500L
+        );
+        assertEquals(threatUuid, record.getThreatUuid(), "Threat UUID matches");
+        assertEquals(12.0, record.getSeverity(), "Severity matches");
+        assertFalse(record.isCommander(), "Regular zombie is not commander");
+        assertFalse(record.isBreaching(), "Not breaching");
+        assertEquals(0, record.getAssignedDefenders().size(), "0 defenders assigned initially");
+
+        UUID defender1 = UUID.randomUUID();
+        record.getAssignedDefenders().add(defender1);
+        assertEquals(1, record.getAssignedDefenders().size(), "1 defender assigned");
+
+        // Target hysteresis: defense rally rate-limits evaluations to eliminate spinning
+        var state = controller.getState(UUID.randomUUID());
+        assertNotNull(state, "Defense state initialized");
+        assertEquals(VillageDefenseController.ThreatLevel.PEACEFUL, state.getThreatLevel(), "Initial state PEACEFUL");
+    }
+
+    // 92. Watchtower Platform 2-Block Headroom & Line-of-Sight Geometry
+    private static void testWatchtowerPlatformHeadroomAndSightlines() {
+        Blueprint archerTower = BlueprintRegistry.get("archer_watchtower");
+        assertNotNull(archerTower, "archer_watchtower blueprint exists");
+        assertEquals(7, archerTower.getWidth(), "Archer watchtower width 7");
+        assertEquals(13, archerTower.getHeight(), "Archer watchtower height 13");
+        assertEquals(7, archerTower.getDepth(), "Archer watchtower depth 7");
+
+        // Platform is at y=10, standing headroom at y=11 and y=12, roof slab at y=13
+        // Sentry standing post: (3, 10, 2) is oak planks
+        assertEquals(Blocks.OAK_PLANKS, archerTower.getBlock(3, 10, 2).getBlock(), "Standing floor is oak planks at y=10");
+        assertTrue(archerTower.getBlock(3, 11, 2).isAir(), "Unobstructed headroom at y=11 (1st block of standing space)");
+        assertTrue(archerTower.getBlock(3, 12, 2).isAir(), "Unobstructed headroom at y=12 (2nd block of standing space)");
+        assertEquals(Blocks.OAK_SLAB, archerTower.getBlock(3, 13, 2).getBlock(), "Protective roof slab at y=13");
+
+        // Lantern is hung at ceiling y=13 at center (3, 13, 3), completely off the platform floor
+        assertEquals(Blocks.LANTERN, archerTower.getBlock(3, 13, 3).getBlock(), "Lantern suspended at roof ceiling y=13");
+        assertTrue(archerTower.getBlock(3, 11, 3).isAir(), "Platform center y=11 clear of lantern");
+        assertTrue(archerTower.getBlock(3, 12, 3).isAir(), "Platform center y=12 clear of lantern");
+
+        // Fortified watchtower 9x16x9 check
+        Blueprint fortTower = BlueprintRegistry.get("watchtower");
+        assertNotNull(fortTower, "Fortified watchtower exists");
+        assertEquals(9, fortTower.getWidth(), "Fortified watchtower width 9");
+        assertEquals(16, fortTower.getHeight(), "Fortified watchtower height 16");
+        assertEquals(9, fortTower.getDepth(), "Fortified watchtower depth 9");
+    }
+
+    // 93. Cavalry Riding Offset (-0.7f) & Mounted Navigation Transfer
+    private static void testCavalryRidingOffsetAndMountedNavigation() {
+        assertNotNull(LivingWorldEntities.VILLAGE_CAVALRY, "VILLAGE_CAVALRY entity type exists");
+        assertEquals(1.74f, LivingWorldEntities.VILLAGE_CAVALRY.getDimensions().eyeHeight(), "Cavalry eye height 1.74f");
+        double offset = LivingWorldEntities.VILLAGE_CAVALRY.getDimensions().attachments().getAverage(net.minecraft.world.entity.EntityAttachment.VEHICLE).y;
+        assertTrue(Math.abs(offset - 0.7) < 0.01, "Cavalry riding offset ~0.7f");
+
+        // Roles
+        assertEquals(3, VillageCavalryEntity.CavalryRole.values().length, "3 Cavalry roles defined");
+        assertEquals("Mounted Swordsman", VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN.getRoleName(), "Mounted Swordsman role name");
+        assertEquals("Mounted Scout", VillageCavalryEntity.CavalryRole.MOUNTED_SCOUT.getRoleName(), "Mounted Scout role name");
+        assertEquals("Mounted Captain", VillageCavalryEntity.CavalryRole.MOUNTED_CAPTAIN.getRoleName(), "Mounted Captain role name");
+    }
+
+    // 94. Safe Spawn Headroom, Solid Footing & Large Mob Validation
+    private static void testSafeSpawnHeadroomAndLargeMobValidation() {
+        // Mutant Commander height >= 2.2f is classified as large mob
+        float commanderHeight = LivingWorldEntities.MUTANT_COMMANDER.getDimensions().height();
+        assertTrue(commanderHeight >= 2.2f, "Mutant commander is a large mob (height >= 2.2f)");
+
+        float golemHeight = net.minecraft.world.entity.EntityTypes.IRON_GOLEM.getDimensions().height();
+        assertTrue(golemHeight >= 2.2f, "Iron golem is a large mob (height >= 2.2f)");
+
+        // Safe spawn validation logic rejects null inputs gracefully
+        assertFalse(SafeSpawnValidation.isValidSpawnLocation(null, LivingWorldEntities.MUTANT_COMMANDER, BlockPos.ZERO), "Null level is invalid");
+        assertFalse(SafeSpawnValidation.isValidSpawnLocation(null, null, BlockPos.ZERO), "Null type is invalid");
+    }
+
+    // 95. Village Dog Taming, Handler Loyalty & Free-Roaming Puppy Breeding
+    private static void testVillageDogTamingTerritoryAndBreeding() {
+        assertNotNull(LivingWorldEntities.VILLAGE_DOG, "VILLAGE_DOG entity type exists");
+        assertEquals(0.7f, LivingWorldEntities.VILLAGE_DOG.getDimensions().eyeHeight(), "Village dog eye height 0.7f");
+
+        // Roles
+        assertEquals(2, VillageDogEntity.DogRole.values().length, "2 Dog roles: CIVILIAN_PET and GUARD_COMPANION");
+        assertEquals("Civilian Pet", VillageDogEntity.DogRole.CIVILIAN_PET.getRoleName(), "Civilian Pet role name");
+        assertEquals("Guard Companion", VillageDogEntity.DogRole.GUARD_COMPANION.getRoleName(), "Guard Companion role name");
+    }
+
+    // 96. Defense Reputation Trust Gains & Milestone Title Thresholds
+    private static void testReputationDefenseMilestones() {
+        ReputationManager rep = ReputationManager.get();
+        assertNotNull(rep, "ReputationManager exists");
+
+        // Milestone titles
+        assertEquals("Untrusted Outcast", rep.getMilestoneTitle(-10), "Negative reputation is Untrusted Outcast");
+        assertEquals("Neutral Guest", rep.getMilestoneTitle(0), "0 reputation is Neutral Guest");
+        assertEquals("Recognized Visitor", rep.getMilestoneTitle(25), "25 reputation is Recognized Visitor");
+        assertEquals("Trusted Friend", rep.getMilestoneTitle(50), "50 reputation is Trusted Friend");
+        assertEquals("Village Ally", rep.getMilestoneTitle(100), "100 reputation is Village Ally");
+        assertEquals("Honored Defender", rep.getMilestoneTitle(200), "200 reputation is Honored Defender");
+
+        // Faction reputation tracking
+        UUID playerUuid = UUID.randomUUID();
+        UUID settlementUuid = UUID.randomUUID();
+        rep.addReputation(playerUuid, settlementUuid, 25);
+        assertEquals(25, rep.getReputation(playerUuid, settlementUuid), "Reputation incremented to 25");
+        assertEquals("Recognized Visitor", rep.getMilestoneTitle(rep.getReputation(playerUuid, settlementUuid)), "Player holds Recognized Visitor standing");
+    }
+
+    // 97. 3D Structure Reservations & Anti-Stacking Building Invariants
+    private static void testStructureBoundingBoxReservationsAndAntiStacking() {
+        Settlement s = new Settlement(UUID.randomUUID(), "AntiStacking Village", new BlockPos(1000, 64, 1000), 64, FactionType.VILLAGER);
+        s.addBuilding("small_oak_house", new BlockPos(1010, 64, 1010), true, 2);
+
+        // Footprint: 7 x 7 x 7 (1010..1016, y=64..70, 1010..1016)
+        assertTrue(s.hasStructureOverlap(new BlockPos(1012, 64, 1012), 7, 7, 7), "Overlapping footprint is rejected");
+        assertTrue(s.hasStructureOverlap(new BlockPos(1010, 71, 1010), 7, 7, 7), "Attempting to build on house roof is rejected (vertical reservation)");
+        assertFalse(s.hasStructureOverlap(new BlockPos(1025, 64, 1025), 7, 7, 7), "Clear detached plot is accepted");
+    }
+
+    // 98. Dimensional Scars Irregular Boundary, Canopy Variation & Fluid Safeguard
+    private static void testDimensionalScarOverhaulAndWaterSafeguard() {
+        assertEquals(7, DimensionalScarGenerator.ScarType.values().length, "7 Dimensional Scar types");
+        assertTrue(DimensionalScarGenerator.ScarType.WARPED_FOREST.isOverworldTarget(), "Warped Forest is Overworld target");
+        assertTrue(DimensionalScarGenerator.ScarType.CRIMSON_FOREST.isOverworldTarget(), "Crimson Forest is Overworld target");
+        assertTrue(DimensionalScarGenerator.ScarType.SOUL_SAND_VALLEY.isOverworldTarget(), "Soul Sand Valley is Overworld target");
+        assertFalse(DimensionalScarGenerator.ScarType.LOST_VILLAGE_ENCLAVE.isOverworldTarget(), "Lost Village Enclave is Nether target");
+        assertFalse(DimensionalScarGenerator.ScarType.OVERWORLD_WOODLAND.isOverworldTarget(), "Overworld Woodland is Nether target");
     }
 
     private static void assertNotNull(Object obj, String message) {

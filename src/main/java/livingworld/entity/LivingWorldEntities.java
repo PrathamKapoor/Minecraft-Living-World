@@ -33,43 +33,43 @@ public class LivingWorldEntities {
     }
 
     public static final EntityType<SharkEntity> SHARK = register("shark",
-        EntityType.Builder.of(SharkEntity::new, MobCategory.WATER_CREATURE).sized(1.4f, 0.7f));
+        EntityType.Builder.of(SharkEntity::new, MobCategory.WATER_CREATURE).sized(1.4f, 0.7f).eyeHeight(0.35f));
 
     public static final EntityType<GargoyleSwooperEntity> GARGOYLE_SWOOPER = register("gargoyle_swooper",
-        EntityType.Builder.of(GargoyleSwooperEntity::new, MobCategory.MONSTER).sized(0.9f, 0.6f));
+        EntityType.Builder.of(GargoyleSwooperEntity::new, MobCategory.MONSTER).sized(0.9f, 0.6f).eyeHeight(0.3f));
 
     public static final EntityType<ZombieCowEntity> ZOMBIE_COW = register("zombie_cow",
-        EntityType.Builder.of(ZombieCowEntity::new, MobCategory.CREATURE).sized(0.9f, 1.4f));
+        EntityType.Builder.of(ZombieCowEntity::new, MobCategory.CREATURE).sized(0.9f, 1.4f).eyeHeight(1.3f));
 
     public static final EntityType<ZombiePigEntity> ZOMBIE_PIG = register("zombie_pig",
-        EntityType.Builder.of(ZombiePigEntity::new, MobCategory.CREATURE).sized(0.9f, 0.9f));
+        EntityType.Builder.of(ZombiePigEntity::new, MobCategory.CREATURE).sized(0.9f, 0.9f).eyeHeight(0.8f));
 
     public static final EntityType<ZombieSheepEntity> ZOMBIE_SHEEP = register("zombie_sheep",
-        EntityType.Builder.of(ZombieSheepEntity::new, MobCategory.CREATURE).sized(0.9f, 1.3f));
+        EntityType.Builder.of(ZombieSheepEntity::new, MobCategory.CREATURE).sized(0.9f, 1.3f).eyeHeight(1.2f));
 
     public static final EntityType<EndVoidStalkerEntity> END_VOID_STALKER = register("end_void_stalker",
-        EntityType.Builder.of(EndVoidStalkerEntity::new, MobCategory.MONSTER).sized(0.8f, 2.2f));
+        EntityType.Builder.of(EndVoidStalkerEntity::new, MobCategory.MONSTER).sized(0.8f, 2.2f).eyeHeight(2.0f));
 
     public static final EntityType<MutantZombieCommanderEntity> MUTANT_COMMANDER = register("mutant_commander",
-        EntityType.Builder.of(MutantZombieCommanderEntity::new, MobCategory.MONSTER).sized(1.2f, 2.4f));
+        EntityType.Builder.of(MutantZombieCommanderEntity::new, MobCategory.MONSTER).sized(1.2f, 2.4f).eyeHeight(2.1f));
 
     public static final EntityType<IllagerSwordsmanEntity> ILLAGER_SWORDSMAN = register("illager_swordsman",
-        EntityType.Builder.of(IllagerSwordsmanEntity::new, MobCategory.MONSTER).sized(0.6f, 1.95f));
+        EntityType.Builder.of(IllagerSwordsmanEntity::new, MobCategory.MONSTER).sized(0.6f, 1.95f).eyeHeight(1.74f).ridingOffset(-0.7f));
 
     public static final EntityType<IllagerShieldbearerEntity> ILLAGER_SHIELDBEARER = register("illager_shieldbearer",
-        EntityType.Builder.of(IllagerShieldbearerEntity::new, MobCategory.MONSTER).sized(0.65f, 1.95f));
+        EntityType.Builder.of(IllagerShieldbearerEntity::new, MobCategory.MONSTER).sized(0.65f, 1.95f).eyeHeight(1.74f).ridingOffset(-0.7f));
 
     public static final EntityType<VillageGuardEntity> VILLAGE_GUARD = register("village_guard",
-        EntityType.Builder.of(VillageGuardEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f));
+        EntityType.Builder.of(VillageGuardEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f).eyeHeight(1.74f).ridingOffset(-0.7f));
 
     public static final EntityType<VillageArcherEntity> VILLAGE_ARCHER = register("village_archer",
-        EntityType.Builder.of(VillageArcherEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f));
+        EntityType.Builder.of(VillageArcherEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f).eyeHeight(1.74f).ridingOffset(-0.7f));
 
     public static final EntityType<VillageDogEntity> VILLAGE_DOG = register("village_dog",
-        EntityType.Builder.of(VillageDogEntity::new, MobCategory.CREATURE).sized(0.6f, 0.85f));
+        EntityType.Builder.of(VillageDogEntity::new, MobCategory.CREATURE).sized(0.6f, 0.85f).eyeHeight(0.7f));
 
     public static final EntityType<VillageCavalryEntity> VILLAGE_CAVALRY = register("village_cavalry",
-        EntityType.Builder.of(VillageCavalryEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f));
+        EntityType.Builder.of(VillageCavalryEntity::new, MobCategory.CREATURE).sized(0.6f, 1.95f).eyeHeight(1.74f).ridingOffset(-0.7f));
 
     private static <T extends net.minecraft.world.entity.Entity> EntityType<T> register(String name, EntityType.Builder<T> builder) {
         Identifier id = Identifier.fromNamespaceAndPath("livingworld", name);

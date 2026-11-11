@@ -170,7 +170,11 @@ public class ZombieHordeManager {
             return; // Commander already active in this zone, prevent duplicate boss bars
         }
 
-        BlockPos leaderPos = positions.get(0);
+        BlockPos rawLeaderPos = positions.get(0);
+        BlockPos leaderPos = livingworld.core.SafeSpawnValidation.findSafeSpawnPosition(level, LivingWorldEntities.MUTANT_COMMANDER, rawLeaderPos, 8);
+        if (leaderPos == null) {
+            leaderPos = rawLeaderPos;
+        }
         MutantZombieCommanderEntity commander = LivingWorldEntities.MUTANT_COMMANDER.create(level, EntitySpawnReason.EVENT);
         if (commander == null) {
             return;

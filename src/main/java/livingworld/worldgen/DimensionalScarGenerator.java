@@ -18,9 +18,13 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * have breached into another across 80–180 block diameters:
  * - Overworld Nether Incursions: Warped Forest, Crimson Forest, Soul Sand Valley, Basalt Deltas, Nether Wastes
  * - Nether Overworld Enclaves: Lost Village Enclave, Woodland Fragment
- * - Noise-based irregular boundary blending, thematic surface replacement, vegetation, and portal ruins
- * - Protected world invariant: respects player claims and pre-existing villages
- * - Chunk-bounded slicing: world alterations execute strictly within loaded chunk bounds to prevent deadlocks
+ * - Noise-based irregular boundary blending, multi-stage gradient transitions, diverse vegetation
+ * - Strict Shoreline / Water Safeguard: Never places flat floating nylium slabs on water surfaces;
+ *   submerges roots and floor transitions to the actual ocean bed.
+ * - Soul Sand Valley fossil variations: Multi-orientation rib cages, spine segments, tusks, and tilted fragments.
+ * - Crimson and Warped Forest canopy diversity: Variable tree heights (5-11), stepped and drooping caps, embedded shroomlights.
+ * - Protected world invariant: respects player claims and pre-existing villages.
+ * - Chunk-bounded slicing: world alterations execute strictly within loaded chunk bounds to prevent deadlocks.
  */
 public class DimensionalScarGenerator {
 
@@ -124,18 +128,45 @@ public class DimensionalScarGenerator {
                 // Safety: never overwrite player-protected blocks
                 if (ProtectionManager.get().isProtectedBlock(level, surfacePos)) continue;
 
-                // Probability of replacement decreases near boundary for smooth transition
                 Random colRandom = new Random(level.getSeed() ^ colPos.asLong());
                 double edgeFactor = dist / effectiveRadius;
-                if (edgeFactor > 0.75 && colRandom.nextDouble() < (edgeFactor - 0.75) * 4.0) {
+
+                // Probability of replacement decreases near boundary for smooth transition
+                if (edgeFactor > 0.85 && colRandom.nextDouble() < (edgeFactor - 0.85) * 6.0) {
                     continue; // Natural gradient blend
                 }
 
-                replaceSurfaceColumn(level, surfacePos.below(), type, colRandom);
+                // Shoreline & Open Water Safeguard (CRITICAL):
+                // NEVER place a flat netherrack or nylium slab on top of water or open oceans!
+                BlockState currentSurfaceState = level.getBlockState(surfacePos.below());
+                if (currentSurfaceState.is(Blocks.WATER) || !level.getFluidState(surfacePos.below()).isEmpty()) {
+                    // Trace down to the actual ocean floor / lake bed
+                    BlockPos bedPos = surfacePos.below();
+                    while (bedPos.getY() > level.getMinY() + 5 && (!level.getBlockState(bedPos).isSolid() || !level.getFluidState(bedPos).isEmpty())) {
+                        bedPos = bedPos.below();
+                    }
+                    if (!level.isLoaded(bedPos) || ProtectionManager.get().isProtectedBlock(level, bedPos)) continue;
+
+                    // Blend ocean floor bed submerged, leaving water surface naturally liquid
+                    if (type == ScarType.WARPED_FOREST) {
+                        setBlockSafe(level, bedPos, Blocks.SOUL_SAND.defaultBlockState());
+                        if (colRandom.nextInt(5) == 0 && level.getBlockState(bedPos.above()).is(Blocks.WATER)) {
+                            setBlockSafe(level, bedPos.above(), Blocks.SEAGRASS.defaultBlockState());
+                        }
+                    } else if (type == ScarType.SOUL_SAND_VALLEY) {
+                        setBlockSafe(level, bedPos, Blocks.SOUL_SOIL.defaultBlockState());
+                    } else if (type == ScarType.CRIMSON_FOREST) {
+                        setBlockSafe(level, bedPos, Blocks.GRAVEL.defaultBlockState());
+                    }
+                    blocksPlaced++;
+                    continue; // Fluid safeguard handled: never paste floating slabs on water!
+                }
+
+                replaceSurfaceColumn(level, surfacePos.below(), type, edgeFactor, colRandom);
                 blocksPlaced++;
 
-                // Thematic Vegetation & Features (1 in 14 blocks)
-                if (colRandom.nextInt(14) == 0 && dist < effectiveRadius * 0.75) {
+                // Thematic Vegetation & Features (1 in 14 blocks, within interior 75% zone)
+                if (colRandom.nextInt(14) == 0 && edgeFactor < 0.75) {
                     placeThematicFeature(level, surfacePos, type, colRandom);
                 }
             }
@@ -185,7 +216,7 @@ public class DimensionalScarGenerator {
         return null;
     }
 
-    private static void replaceSurfaceColumn(ServerLevel level, BlockPos surfaceBlock, ScarType type, Random random) {
+    private static void replaceSurfaceColumn(ServerLevel level, BlockPos surfaceBlock, ScarType type, double edgeFactor, Random random) {
         if (level == null || surfaceBlock == null || !level.isLoaded(surfaceBlock)) return;
 
         BlockState topState;
@@ -193,16 +224,40 @@ public class DimensionalScarGenerator {
 
         switch (type) {
             case WARPED_FOREST -> {
-                topState = Blocks.WARPED_NYLIUM.defaultBlockState();
-                subState = Blocks.NETHERRACK.defaultBlockState();
+                if (edgeFactor > 0.75) {
+                    topState = random.nextBoolean() ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.NETHERRACK.defaultBlockState();
+                    subState = Blocks.DIRT.defaultBlockState();
+                } else if (edgeFactor > 0.50) {
+                    topState = random.nextInt(3) == 0 ? Blocks.NETHERRACK.defaultBlockState() : Blocks.WARPED_NYLIUM.defaultBlockState();
+                    subState = Blocks.NETHERRACK.defaultBlockState();
+                } else {
+                    topState = Blocks.WARPED_NYLIUM.defaultBlockState();
+                    subState = Blocks.NETHERRACK.defaultBlockState();
+                }
             }
             case CRIMSON_FOREST -> {
-                topState = Blocks.CRIMSON_NYLIUM.defaultBlockState();
-                subState = Blocks.NETHERRACK.defaultBlockState();
+                if (edgeFactor > 0.75) {
+                    topState = random.nextBoolean() ? Blocks.COARSE_DIRT.defaultBlockState() : Blocks.NETHERRACK.defaultBlockState();
+                    subState = Blocks.DIRT.defaultBlockState();
+                } else if (edgeFactor > 0.50) {
+                    topState = random.nextInt(3) == 0 ? Blocks.NETHERRACK.defaultBlockState() : Blocks.CRIMSON_NYLIUM.defaultBlockState();
+                    subState = Blocks.NETHERRACK.defaultBlockState();
+                } else {
+                    topState = Blocks.CRIMSON_NYLIUM.defaultBlockState();
+                    subState = Blocks.NETHERRACK.defaultBlockState();
+                }
             }
             case SOUL_SAND_VALLEY -> {
-                topState = random.nextBoolean() ? Blocks.SOUL_SAND.defaultBlockState() : Blocks.SOUL_SOIL.defaultBlockState();
-                subState = Blocks.SOUL_SOIL.defaultBlockState();
+                if (edgeFactor > 0.80) {
+                    topState = random.nextBoolean() ? Blocks.GRAVEL.defaultBlockState() : Blocks.COARSE_DIRT.defaultBlockState();
+                    subState = Blocks.DIRT.defaultBlockState();
+                } else {
+                    int roll = random.nextInt(10);
+                    if (roll < 5) topState = Blocks.SOUL_SAND.defaultBlockState();
+                    else if (roll < 8) topState = Blocks.SOUL_SOIL.defaultBlockState();
+                    else topState = Blocks.BASALT.defaultBlockState();
+                    subState = Blocks.SOUL_SOIL.defaultBlockState();
+                }
             }
             case BASALT_DELTAS -> {
                 topState = random.nextInt(3) == 0 ? Blocks.BLACKSTONE.defaultBlockState() : Blocks.BASALT.defaultBlockState();
@@ -248,10 +303,13 @@ public class DimensionalScarGenerator {
                 else if (roll == 2) generateCrimsonFungusTree(level, pos, random);
             }
             case SOUL_SAND_VALLEY -> {
-                if (random.nextInt(3) == 0) {
-                    setBlockSafe(level, pos, Blocks.SOUL_FIRE.defaultBlockState());
-                } else if (random.nextInt(4) == 0) {
-                    generateFossilArch(level, pos, random);
+                BlockState ground = level.getBlockState(pos.below());
+                if (ground.is(Blocks.SOUL_SAND) || ground.is(Blocks.SOUL_SOIL)) {
+                    if (random.nextInt(3) == 0) {
+                        setBlockSafe(level, pos, Blocks.SOUL_FIRE.defaultBlockState());
+                    } else if (random.nextInt(3) == 0) {
+                        generateFossilStructure(level, pos, random);
+                    }
                 }
             }
             case BASALT_DELTAS -> {
@@ -266,9 +324,13 @@ public class DimensionalScarGenerator {
                 }
             }
             case LOST_VILLAGE_ENCLAVE, OVERWORLD_WOODLAND -> {
-                // Generate Oak or Spruce trees inside the Nether enclave
+                // Generate varied Oak and Spruce trees inside Nether enclave
                 if (random.nextInt(3) == 0) {
-                    generateSmallOakTree(level, pos, random);
+                    if (random.nextBoolean()) {
+                        generateSmallOakTree(level, pos, random);
+                    } else {
+                        generateSpruceTree(level, pos, random);
+                    }
                 } else {
                     setBlockSafe(level, pos, Blocks.SHORT_GRASS.defaultBlockState());
                 }
@@ -277,51 +339,137 @@ public class DimensionalScarGenerator {
     }
 
     private static void generateWarpedFungusTree(ServerLevel level, BlockPos base, Random random) {
-        int height = 4 + random.nextInt(4);
+        // Variable height: 5 to 11 blocks (Section 12)
+        int height = 5 + random.nextInt(7);
         for (int y = 0; y < height; y++) {
             setBlockSafe(level, base.above(y), Blocks.WARPED_STEM.defaultBlockState());
         }
         BlockPos capCenter = base.above(height);
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
+
+        // Diverse Stepped Cap with Shroomlights and Drooping Overhangs
+        for (int dy = -1; dy <= 2; dy++) {
+            int radius = (dy == 2) ? 1 : ((dy == 1) ? 2 : 3);
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius > 1) continue;
                     BlockPos p = capCenter.offset(dx, dy, dz);
                     if (isAirSafe(level, p)) {
-                        setBlockSafe(level, p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.WARPED_WART_BLOCK).defaultBlockState());
+                        boolean isShroomlight = (dy <= 0 && random.nextInt(5) == 0);
+                        setBlockSafe(level, p, (isShroomlight ? Blocks.SHROOMLIGHT : Blocks.WARPED_WART_BLOCK).defaultBlockState());
                     }
+                }
+            }
+        }
+        // Drooping tendrils on edge corners
+        int[][] droopOffsets = {{-2, 0}, {2, 0}, {0, -2}, {0, 2}};
+        for (int[] off : droopOffsets) {
+            if (random.nextBoolean()) {
+                BlockPos dp = capCenter.offset(off[0], -2, off[1]);
+                if (isAirSafe(level, dp)) {
+                    setBlockSafe(level, dp, Blocks.WARPED_WART_BLOCK.defaultBlockState());
                 }
             }
         }
     }
 
     private static void generateCrimsonFungusTree(ServerLevel level, BlockPos base, Random random) {
-        int height = 4 + random.nextInt(4);
+        // Variable height: 5 to 11 blocks (Section 12)
+        int height = 5 + random.nextInt(7);
         for (int y = 0; y < height; y++) {
             setBlockSafe(level, base.above(y), Blocks.CRIMSON_STEM.defaultBlockState());
         }
         BlockPos capCenter = base.above(height);
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    if (Math.abs(dx) == 2 && Math.abs(dz) == 2) continue;
+
+        // Diverse Stepped Conical Cap with Shroomlights
+        for (int dy = -1; dy <= 2; dy++) {
+            int radius = (dy == 2) ? 1 : ((dy == 1) ? 2 : 3);
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius > 1) continue;
                     BlockPos p = capCenter.offset(dx, dy, dz);
                     if (isAirSafe(level, p)) {
-                        setBlockSafe(level, p, (random.nextInt(6) == 0 ? Blocks.SHROOMLIGHT : Blocks.NETHER_WART_BLOCK).defaultBlockState());
+                        boolean isShroomlight = (dy <= 0 && random.nextInt(5) == 0);
+                        setBlockSafe(level, p, (isShroomlight ? Blocks.SHROOMLIGHT : Blocks.NETHER_WART_BLOCK).defaultBlockState());
                     }
+                }
+            }
+        }
+        // Drooping tendrils on edge corners
+        int[][] droopOffsets = {{-2, 0}, {2, 0}, {0, -2}, {0, 2}};
+        for (int[] off : droopOffsets) {
+            if (random.nextBoolean()) {
+                BlockPos dp = capCenter.offset(off[0], -2, off[1]);
+                if (isAirSafe(level, dp)) {
+                    setBlockSafe(level, dp, Blocks.NETHER_WART_BLOCK.defaultBlockState());
                 }
             }
         }
     }
 
-    private static void generateFossilArch(ServerLevel level, BlockPos base, Random random) {
-        int height = 3 + random.nextInt(3);
-        for (int y = 0; y < height; y++) {
-            setBlockSafe(level, base.above(y), Blocks.BONE_BLOCK.defaultBlockState());
-            setBlockSafe(level, base.offset(3, y, 0), Blocks.BONE_BLOCK.defaultBlockState());
+    /**
+     * Varied Soul Sand Valley Bone Fossil Structures (Section 12).
+     * 1. Curving Rib Cage (spans 5 blocks with inward arching ribs)
+     * 2. Spine / Vertebrae Fragment (linear row with vertical protrusions)
+     * 3. Protruding Tusk / Spire (4 to 8 blocks tall with curve)
+     * 4. Tilted Fossil Fragment (embedded diagonally into ground)
+     */
+    private static void generateFossilStructure(ServerLevel level, BlockPos base, Random random) {
+        int variant = random.nextInt(4);
+        boolean alignX = random.nextBoolean();
+
+        switch (variant) {
+            case 0 -> {
+                // 1. Curving Rib Cage
+                int ribHeight = 3 + random.nextInt(3);
+                for (int y = 0; y < ribHeight; y++) {
+                    if (alignX) {
+                        setBlockSafe(level, base.offset(-2, y, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                        setBlockSafe(level, base.offset(2, y, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                    } else {
+                        setBlockSafe(level, base.offset(0, y, -2), Blocks.BONE_BLOCK.defaultBlockState());
+                        setBlockSafe(level, base.offset(0, y, 2), Blocks.BONE_BLOCK.defaultBlockState());
+                    }
+                }
+                // Overarching rib connector
+                if (alignX) {
+                    setBlockSafe(level, base.offset(-1, ribHeight, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                    setBlockSafe(level, base.offset(0, ribHeight, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                    setBlockSafe(level, base.offset(1, ribHeight, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                } else {
+                    setBlockSafe(level, base.offset(0, ribHeight, -1), Blocks.BONE_BLOCK.defaultBlockState());
+                    setBlockSafe(level, base.offset(0, ribHeight, 0), Blocks.BONE_BLOCK.defaultBlockState());
+                    setBlockSafe(level, base.offset(0, ribHeight, 1), Blocks.BONE_BLOCK.defaultBlockState());
+                }
+            }
+            case 1 -> {
+                // 2. Spine / Vertebrae Segment
+                int length = 4 + random.nextInt(3);
+                for (int i = 0; i < length; i++) {
+                    BlockPos spine = alignX ? base.offset(i - length / 2, 0, 0) : base.offset(0, 0, i - length / 2);
+                    setBlockSafe(level, spine, Blocks.BONE_BLOCK.defaultBlockState());
+                    if (i % 2 == 0) {
+                        setBlockSafe(level, spine.above(), Blocks.BONE_BLOCK.defaultBlockState());
+                    }
+                }
+            }
+            case 2 -> {
+                // 3. Protruding Tusk / Spire (4 to 7 blocks tall)
+                int tuskHeight = 4 + random.nextInt(4);
+                for (int y = 0; y < tuskHeight; y++) {
+                    int xOff = (y > 3) ? (alignX ? 1 : 0) : 0;
+                    int zOff = (y > 3) ? (!alignX ? 1 : 0) : 0;
+                    setBlockSafe(level, base.offset(xOff, y, zOff), Blocks.BONE_BLOCK.defaultBlockState());
+                }
+            }
+            case 3 -> {
+                // 4. Tilted Diagonal Bone Fragment
+                int diagLen = 3 + random.nextInt(3);
+                for (int d = 0; d < diagLen; d++) {
+                    BlockPos diag = alignX ? base.offset(d, d, 0) : base.offset(0, d, d);
+                    setBlockSafe(level, diag, Blocks.BONE_BLOCK.defaultBlockState());
+                }
+            }
         }
-        setBlockSafe(level, base.offset(1, height, 0), Blocks.BONE_BLOCK.defaultBlockState());
-        setBlockSafe(level, base.offset(2, height, 0), Blocks.BONE_BLOCK.defaultBlockState());
     }
 
     private static void generateSmallOakTree(ServerLevel level, BlockPos base, Random random) {
@@ -341,6 +489,28 @@ public class DimensionalScarGenerator {
                 }
             }
         }
+    }
+
+    private static void generateSpruceTree(ServerLevel level, BlockPos base, Random random) {
+        int trunkHeight = 6 + random.nextInt(3);
+        for (int y = 0; y < trunkHeight; y++) {
+            setBlockSafe(level, base.above(y), Blocks.SPRUCE_LOG.defaultBlockState());
+        }
+        // Conical spruce needle layers
+        for (int y = 2; y <= trunkHeight; y++) {
+            int radius = (trunkHeight - y) % 2 == 0 ? 2 : 1;
+            if (y == trunkHeight) radius = 1;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (Math.abs(dx) == radius && Math.abs(dz) == radius && radius > 1) continue;
+                    BlockPos p = base.offset(dx, y, dz);
+                    if (isAirSafe(level, p)) {
+                        setBlockSafe(level, p, Blocks.SPRUCE_LEAVES.defaultBlockState());
+                    }
+                }
+            }
+        }
+        setBlockSafe(level, base.above(trunkHeight + 1), Blocks.SPRUCE_LEAVES.defaultBlockState());
     }
 
     /**
@@ -375,6 +545,7 @@ public class DimensionalScarGenerator {
 
     /**
      * Generates an abandoned rustic Overworld village cottage inside the Nether enclave.
+     * Well-anchored deep foundation to withstand netherrack erosion.
      */
     private static void generateAbandonedOverworldCottage(ServerLevel level, BlockPos center) {
         if (level == null || center == null || !level.isLoaded(center)) return;
@@ -382,10 +553,12 @@ public class DimensionalScarGenerator {
         if (ground == null) ground = center;
         if (!level.isLoaded(ground)) return;
 
-        // 5x5 Cobblestone & Oak Cottage
+        // Solid anchored foundation extending 2 blocks deep into netherrack
         for (int x = -2; x <= 2; x++) {
             for (int z = -2; z <= 2; z++) {
-                setBlockSafe(level, ground.offset(x, -1, z), Blocks.COBBLESTONE.defaultBlockState());
+                for (int y = -2; y <= -1; y++) {
+                    setBlockSafe(level, ground.offset(x, y, z), Blocks.COBBLESTONE.defaultBlockState());
+                }
                 for (int y = 0; y <= 3; y++) {
                     boolean isCorner = (Math.abs(x) == 2 && Math.abs(z) == 2);
                     boolean isWall = (Math.abs(x) == 2 || Math.abs(z) == 2);
@@ -393,7 +566,7 @@ public class DimensionalScarGenerator {
                         setBlockSafe(level, ground.offset(x, y, z), Blocks.OAK_LOG.defaultBlockState());
                     } else if (isWall) {
                         if (x == 0 && z == -2 && (y == 0 || y == 1)) {
-                            // Door entrance (leave open or broken)
+                            // Door entrance
                             continue;
                         }
                         setBlockSafe(level, ground.offset(x, y, z), Blocks.OAK_PLANKS.defaultBlockState());
@@ -409,9 +582,10 @@ public class DimensionalScarGenerator {
             }
         }
 
-        // Interior relics: Crafting table, abandoned chest, cobwebs
+        // Interior relics: Crafting table, abandoned chest, cobwebs, lantern
         setBlockSafe(level, ground.offset(1, 0, 1), Blocks.CRAFTING_TABLE.defaultBlockState());
         setBlockSafe(level, ground.offset(-1, 0, 1), Blocks.CHEST.defaultBlockState());
         setBlockSafe(level, ground.offset(1, 2, -1), Blocks.COBWEB.defaultBlockState());
+        setBlockSafe(level, ground.offset(0, 3, 0), Blocks.LANTERN.defaultBlockState());
     }
 }

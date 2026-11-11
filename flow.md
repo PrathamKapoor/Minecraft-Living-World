@@ -1,28 +1,82 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-10T18:35:00Z
-- Active milestone/task: Version 0.2.7 The Siege & Settlement Reliability Update — COMPLETE
-- Last known passing build: STEP 0024 (livingworld-0.2.7.jar with 78 classes, 380,764 bytes; 88/88 acceptance tests passed; 8/8 gameplay playtest scenarios passed; 0 files in assets/minecraft/*)
+- UTC time: 2026-11-11T19:25:00Z
+- Active milestone/task: Version 0.2.8 — Operation: Make the World Actually Alive (AI, Architecture, Combat, Civilization & World Generation Stabilization) — COMPLETED
+- Last known passing build: STEP 0025 (livingworld-0.2.8.jar with 81 classes, 415,983 bytes; 98/98 acceptance tests passed; 8/8 gameplay playtest scenarios passed; 60s in-world Survival quickplay passed; 0 files in assets/minecraft/*)
+- Current build status: All 98 acceptance tests PASSED; all 8 gameplay playtest scenarios PASSED; 60s in-world Survival quickplay PASSED on dedicated instance LivingWorld.
 - Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
-- Rollback Point Established: `backup_v0.2.6/livingworld-0.2.6.jar` (Length: 357,654 bytes)
-- Prior Rollback Points:
-  - `backup_v0.2.5/livingworld-0.2.5.jar` (Length: 309,832 bytes)
-  - `backup_v0.2.4/livingworld-0.2.4.jar` (SHA256: 307A4C2E58C930E2E231150EBBDB2F5D7B6018EF470FF7D8F8819619B156CEDB)
-  - `backup_v0.2.3/livingworld-0.2.3.jar` (SHA256: 2CAF4C7AC48EE44D0DDE1C7D0B7D28854A5893347D01576D1E7182D4341CEFBF)
-  - `backup_v0.2.2/livingworld-0.2.2.jar` (SHA256: 2E79A77A764951F434F15AAF50F71F3DBDC51F8560215E9B73A2456E6F218B00)
-  - `backup_v0.2.1/livingworld-0.2.1.jar` (SHA256: CB7A121B050601418FEDAC95AFC7C038468EC6A2C27C97A044774363CF1028A3)
-  - `backup_v0.2.0/livingworld-0.2.0.jar` (SHA256: 96B73EBDB46B6624842469FE5884AE449ADC62D74FE9EED71D0EADA14014B4E0)
-- Latest playable artifact: instances/LivingWorld/minecraft/mods/livingworld-0.2.7.jar (380,764 bytes)
-- Integrated Dependencies: 20 active Fabric mods in `instances/LivingWorld/minecraft/mods/`
-- Files modified but unverified: None (88/88 acceptance tests, 8/8 gameplay scenarios, and 60s in-world Survival quickplay passed)
-- Known blockers: None
+- Rollback Point Established: `backup_v0.2.8/livingworld-0.2.8.jar` (Length: 415,983 bytes, SHA256: `CDBBD0A2DE1F2C6C0E81FE7C6E16D9CA6C3179D76A5C2C696716A4BB7C9A68DB`)
 - Critical Constraint: DO NOT PUSH to GitHub until user explicitly sends "PUSH". Local commits strictly under PrathamKapoor <prathamkapoor027@gmail.com>.
-- NEXT ACTION: Stand ready for user gameplay instructions, playtesting feedback, or explicit "PUSH" authorization.
+- NEXT ACTION: Stage all changes and create local git commit `feat(v0.2.8): Operation: Make the World Actually Alive stabilization overhaul`.
 
 ---
 
 ## CHRONOLOGICAL JOURNAL
+
+### 2026-11-11T19:20:00Z — STEP 0025 — DONE
+Goal: Execute Version 0.2.8 Operation: Make the World Actually Alive (Stabilization & Quality Overhaul):
+  1. Watchtower Defensive Architecture Overhaul: Complete redesign of archer_watchtower and watchtower blueprints providing y=10 platform with 2 full blocks of clear vertical standing headroom (y=11..12), roof slab at y=13, lantern suspended high at ceiling with zero floor obstruction, parapets with 8-direction firing ports, and automated raycast line-of-sight validation.
+  2. Defender Target Hysteresis & Anti-Spinning AI: Gated LookAtPlayerGoal, RandomLookAroundGoal, and WaterAvoidingRandomStrollGoal to non-combat states (`getTarget() == null && patrolState == PatrolState.PATROL`). Enforced 30-tick target preservation hysteresis in `setTarget()` and throttled defense rallies to 20-tick intervals. Added orientation tracking telemetry.
+  3. Authoritative Threat Allocation & Defense Records: Centralized `ThreatRecord` state in `VillageDefenseController` tracking threat UUID, mob type, location, severity, victim UUID, breach flag, horde flag, commander flag, assigned defenders, and observation ticks. Intelligently allocates frontline guards, archers, and reserves.
+  4. Civilian Distress Signalling: Implemented `CivilianDistressManager` with single distress event per incident (300-tick deduplication), panic reactions (audio, particles, facing attacker, fleeing), and emergency responder dispatch (1-2 closest defenders).
+  5. Autonomous 5-State Civilian Shelter Lifecycle: Implemented `CivilianShelterManager` (`WORKING -> THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING`) routing to interior safe buildings and coordinating door closures with a 40-tick anti-thrashing cooldown.
+  6. Safe Spawn Validation Engine: Implemented `SafeSpawnValidation` requiring solid ground footing, full multi-block bounding box clearance, and >= 1.0m extra vertical headroom for large mobs (Iron Golems, Mutant Commanders). Spiral search fallback fails gracefully to null rather than forcing spawns inside solid blocks.
+  7. Cavalry Riding Offset & Mounted Combat AI: Registered `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)` across all humanoid riders, eliminating 0.7m floating gap above saddles. Mounted riders forward navigation paths and combat targets to horse mounts, with seamless infantry combat transition upon dismount.
+  8. Territorial Village Dogs & Breeder Puppies: Village dogs default to `villageBound=true` and return home if led away with gentle boundary reminders; guard companion dogs remain loyal to handlers and refuse player taming; bred puppies inherit `villageBound=false` (free-roaming).
+  9. Natural Village Defense Reputation: Implemented organic trust awards (+1 hostile, +2 miner/armored, +3 raider, +5 saving villager, +10 commander) with 15-tick cooldown. Silent trust additions with quiet celebration announcements at milestones (25, 50, 100, 200) with titles (`Recognized Visitor`, `Trusted Ally`, `Village Protector`, `Honored Defender`).
+  10. 3D Structure Reservations & Anti-Stacking Engine: Added 3D bounding box reservation checks across existing buildings, active projects, and queued projects in `Settlement.hasStructureOverlap()`. Plot selection surveys ground and rejects building roofs.
+  11. Dimensional Scars Biome Overhaul: Soul Sand Valley with 4 fossil types (rib cages, vertebrae, tusks, fragments) and noise-blended soil/basalt; Crimson/Warped trees (5-11m tall with stepped drooping caps); fluid detection tracing down to seabed leaving water flowing naturally with zero floating slabs.
+  12. Real Profession Activities & Workforce Diagnostics: Enforced daytime work hours (2000-9000 ticks), work suspension during attacks, authentic raw material consumption (wood for arrows, iron for weapons/gear), and genuine understaffed diagnostic causes.
+  13. Debug & Telemetry Commands: Added `/livingworld reputation`, `/livingworld defense threats`, `/livingworld defense distress`, `/livingworld defense shelters`, and updated `/livingworld professions list` with diagnostics.
+  14. Expanded Automated Test Suite: Added Tests 89 through 98 covering all new v0.2.8 systems and invariants. Full suite (98/98 tests) passed cleanly.
+  15. Gameplay Scenarios & In-World Survival Quickplay: All 8 gameplay scenarios passed. 60-second in-world Survival quickplay in Prism instance `LivingWorld` executed with 0 errors, 0 crashes, clean shutdown.
+Files Modified/Created:
+  - `src/main/java/livingworld/faction/CivilianDistressManager.java` (CREATED)
+  - `src/main/java/livingworld/faction/CivilianShelterManager.java` (CREATED)
+  - `src/main/java/livingworld/core/SafeSpawnValidation.java` (CREATED)
+  - `src/main/java/livingworld/faction/VillageDefenseController.java`
+  - `src/main/java/livingworld/entity/VillageGuardEntity.java`
+  - `src/main/java/livingworld/entity/VillageArcherEntity.java`
+  - `src/main/java/livingworld/entity/VillageCavalryEntity.java`
+  - `src/main/java/livingworld/entity/VillageDogEntity.java`
+  - `src/main/java/livingworld/entity/LivingWorldEntities.java`
+  - `src/main/java/livingworld/faction/ReputationManager.java`
+  - `src/main/java/livingworld/faction/VillageGolemManager.java`
+  - `src/main/java/livingworld/undead/ZombieHordeManager.java`
+  - `src/main/java/livingworld/settlement/Blueprint.java`
+  - `src/main/java/livingworld/settlement/BlueprintRegistry.java`
+  - `src/main/java/livingworld/settlement/Settlement.java`
+  - `src/main/java/livingworld/settlement/SettlementManager.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarGenerator.java`
+  - `src/main/java/livingworld/economy/VillageWorkforceManager.java`
+  - `src/main/java/livingworld/command/LivingWorldCommand.java`
+  - `src/main/java/livingworld/LivingWorldMod.java`
+  - `src/main/resources/fabric.mod.json`
+  - `scripts/build.ps1`
+  - `src/test/java/livingworld/LivingWorldTests.java`
+  - `docs/WATCHTOWER_VISUAL_AUDIT.md` (CREATED)
+  - `docs/DEFENSE_AI_REGRESSION.md` (CREATED)
+  - `docs/CIVILIAN_DISTRESS_TESTS.md` (CREATED)
+  - `docs/CAVALRY_RENDER_AUDIT.md` (CREATED)
+  - `docs/LARGE_ENTITY_COLLISION.md` (CREATED)
+  - `docs/DIMENSIONAL_SCAR_VISUAL_AUDIT.md` (CREATED)
+  - `docs/REPUTATION_AND_PETS.md` (CREATED)
+  - `docs/COMMANDS.md`
+  - `docs/PLAYTEST.md`
+  - `docs/FEATURE_MATRIX.md`
+  - `decisions.md`
+  - `handoff.md`
+  - `flow.md`
+Outcome:
+  - Compiled and packaged `build/libs/livingworld-0.2.8.jar` (415,983 bytes across 81 classes).
+  - Rollback point: `backup_v0.2.8/livingworld-0.2.8.jar` (SHA256: `CDBBD0A2DE1F2C6C0E81FE7C6E16D9CA6C3179D76A5C2C696716A4BB7C9A68DB`).
+  - Deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.8.jar`.
+  - 98/98 automated acceptance tests passed.
+  - 8/8 gameplay playtest scenarios passed.
+  - 60s in-world Survival quickplay simulation passed with 0 errors.
+  - Exactly 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Push Hold strictly active. Zero pushes to remote repository. All commits local under `PrathamKapoor <prathamkapoor027@gmail.com>`.
 
 ### 2026-11-10T18:35:00Z — STEP 0024 — DONE
 Goal: Execute Version 0.2.7 The Siege & Settlement Reliability Update:

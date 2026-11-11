@@ -97,7 +97,7 @@ if (Test-Path "$projectRoot\src\main\resources") {
 }
 
 # Package JAR
-$modJar = "$libsDir\livingworld-0.2.7.jar"
+$modJar = "$libsDir\livingworld-0.2.8.jar"
 if (Test-Path $modJar) { Remove-Item -Force $modJar }
 
 Set-Location $classesDir
@@ -138,8 +138,11 @@ if (Test-Path $instanceMods) {
     if (Test-Path "$instanceMods\livingworld-0.2.6.jar") {
         Remove-Item -Force "$instanceMods\livingworld-0.2.6.jar"
     }
-    Copy-Item -Path $modJar -Destination "$instanceMods\livingworld-0.2.7.jar" -Force
-    Write-Host "Deployed to Prism Launcher instance: $instanceMods\livingworld-0.2.7.jar" -ForegroundColor Green
+    if (Test-Path "$instanceMods\livingworld-0.2.7.jar") {
+        Remove-Item -Force "$instanceMods\livingworld-0.2.7.jar"
+    }
+    Copy-Item -Path $modJar -Destination "$instanceMods\livingworld-0.2.8.jar" -Force
+    Write-Host "Deployed to Prism Launcher instance: $instanceMods\livingworld-0.2.8.jar" -ForegroundColor Green
 }
 
 Write-Host "========================================" -ForegroundColor Cyan

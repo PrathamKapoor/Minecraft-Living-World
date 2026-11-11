@@ -41,9 +41,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.monster.Creeper;
@@ -64,10 +66,15 @@ public class LivingWorldMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static long serverTicks = 0;
+    private static MinecraftServer currentServer = null;
+
+    public static MinecraftServer getCurrentServer() {
+        return currentServer;
+    }
 
     @Override
     public void onInitialize() {
-        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.7 for Minecraft 26.3 (Java 25)");
+        LOGGER.info("[Living World] Initializing Minecraft: Living World v0.2.8 for Minecraft 26.3 (Java 25)");
 
         // 1. Initialize Configuration
         File configFile = FabricLoader.getInstance().getConfigDir().resolve("livingworld.json").toFile();
@@ -161,6 +168,13 @@ public class LivingWorldMod implements ModInitializer {
                 return ReputationManager.get().handleGuardHit(player, guardMob, settlement);
             }
 
+            // Civilian Distress Signalling (Section 5, v0.2.8 Stabilization)
+            if (victim instanceof net.minecraft.world.entity.npc.villager.Villager villager
+                && source.getEntity() instanceof net.minecraft.world.entity.LivingEntity attacker
+                && victim.level() instanceof ServerLevel sl) {
+                livingworld.faction.CivilianDistressManager.get().reportDistress(sl, villager, attacker);
+            }
+
             // Golem accidental hit forgiveness (F05)
             if (victim instanceof IronGolem golem && source.getEntity() instanceof ServerPlayer player) {
                 BlockPos pos = golem.blockPosition();
@@ -182,6 +196,10 @@ public class LivingWorldMod implements ModInitializer {
                 }
                 if (damageSource.getEntity() instanceof livingworld.entity.VillageGuardEntity guard) {
                     livingworld.faction.VillageGuardManager.get().onGuardKill(sl, guard);
+                }
+                // Section 9: Player village defense reputation rewards
+                if (damageSource.getEntity() instanceof ServerPlayer player && entity instanceof LivingEntity threat) {
+                    ReputationManager.get().onMonsterDefeated(player, threat, sl);
                 }
             }
         });
@@ -241,6 +259,7 @@ public class LivingWorldMod implements ModInitializer {
         // 9. Server Lifecycle: World Save & Load Hooks
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             serverTicks = 0;
+            currentServer = server;
             LOGGER.info("[Living World] Server started. Shared world simulation activated.");
             ServerLevel overworld = server.overworld();
             if (overworld != null) {
@@ -261,6 +280,7 @@ public class LivingWorldMod implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             LOGGER.info("[Living World] Server stopped. Checkpointing simulation state...");
+            currentServer = null;
             ServerLevel overworld = server.overworld();
             if (overworld != null) {
                 SettlementManager.get().save(overworld);

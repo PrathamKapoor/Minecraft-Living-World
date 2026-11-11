@@ -123,6 +123,10 @@ public class Blueprint {
         return blocks;
     }
 
+    public BlockState getBlock(int x, int y, int z) {
+        return blocks.getOrDefault(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState());
+    }
+
     public Map<Stockpile.ResourceType, Integer> getResourceCost() {
         return resourceCost;
     }

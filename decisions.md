@@ -19,6 +19,8 @@
 - DEC-0016: Source-First Reengineering, Humanoid Guard Architecture, and Armor/Weapon Visual Pipeline — ACCEPTED
 - DEC-0017: The Living Village Update — Autonomous Civilizations, Organized Defense & Functional Professions — ACCEPTED
 - DEC-0018: Civilization Intelligence, Dimensional Scars & Release Engineering Architecture — ACCEPTED
+- DEC-0020: The Siege & Settlement Reliability Update Architecture — ACCEPTED
+- DEC-0025: Defense AI, Distress Signaling, Watchtower Geometry, and World Stabilization — ACCEPTED
 
 ---
 
@@ -485,4 +487,47 @@ Verification:
   - 60-second in-world Survival quickplay executed on dedicated instance `instances/LivingWorld/` with 0 errors.
   - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
 Revisit trigger: Siege weaponry, catapult mechanics, or multi-village alliances.
+
+---
+
+## DEC-0025 — Defense AI, Distress Signaling, Watchtower Geometry, and World Stabilization (v0.2.8)
+Date: 2026-11-11T19:10:00Z
+Status: accepted
+Context: Real gameplay testing of v0.2.7 revealed several functional incompletenesses:
+  1. Watchtowers lacked headroom, had awkward lanterns/doors on platforms, and sentries had obstructed lines of sight.
+  2. Guards and archers randomly spun during combat due to competing look/move goals and tick-by-tick target thrashing.
+  3. Defenders swarmed single isolated zombies while hordes slaughtered villagers (lack of shared threat allocation).
+  4. Civilians lacked distress signaling when attacked, and failed to seek shelter inside buildings.
+  5. Large mobs (Iron Golems, Mutant Commanders) risked spawning inside walls and low-ceiling residential rooms.
+  6. Cavalry units floated 0.7m above horse saddles due to missing riding offsets, and horse AI ignored mob riders.
+  7. Village dogs were tamed away from settlements without awareness; free-roaming puppies were missing.
+  8. Player defense reputation had no organic gains or milestone announcements.
+  9. Workforce professions lacked authentic raw material consumption, daytime hours, and genuine diagnostics for deficits.
+  10. Buildings occasionally stacked on top of existing house roofs due to heightmap motion-blocking returning roofs.
+  11. Dimensional scars generated flat stone slabs over open water and lacked organic fossil/canopy variations.
+Options:
+  1. Register more custom content to increase feature count.
+  2. Execute a rigorous stabilization and quality overhaul addressing root causes across the entire simulation:
+     - **Watchtower Geometry**: 2 full blocks of clear standing headroom at y=11..12, lanterns elevated to ceiling at y=13, parapets with 8-direction firing ports, and raycast line-of-sight validation.
+     - **Anti-Spinning & Target Hysteresis**: 30-tick target preservation cooldown, 20-tick defense rally rate limiting, and strict gating of idle stroll/look goals to non-combat states.
+     - **Authoritative Threat Allocation**: Shared settlement `ThreatRecord` state tracking severity, breaching, horde members, and assigned defenders.
+     - **Civilian Distress Signalling**: Deduplicated 300-tick signals with audio/particles, dispatching 1–2 nearest defenders.
+     - **5-State Civilian Shelter Machine**: `WORKING -> THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING` with 40-tick door closure coordination.
+     - **Safe Spawn Clearance Engine**: `SafeSpawnValidation` checking solid footing, bounding box clearance, and extra vertical headroom for large mobs.
+     - **Cavalry Alignment**: Explicit `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)` across all humanoid riders; mounted steering passes combat target to horse entity.
+     - **Territorial Village Dogs & Free Puppies**: Adult village dogs tethered to settlement territory; puppies born free-roaming; companion dogs loyal to handlers.
+     - **Organic Defense Reputation**: Trust awarded for defending settlements (+1 to +10) with quiet milestone notifications at 25, 50, 100, 200.
+     - **3D Structure Reservations**: 3D bounding box checks rejecting overlapping footprints and roofs.
+     - **Dimensional Scar Overhaul**: Noise-blended Soul Sand Valley with 4 fossil types (ribs, spines, tusks, fragments), Crimson/Warped trees (5–11m tall with stepped caps), and strict water safeguards preventing floating slabs.
+Decision: Option 2.
+Rationale: Elevates the mod from "registered features" to authentic, living, observable gameplay mechanics.
+Trade-offs: Mod JAR packaged at 415,983 bytes across 81 compiled classes.
+Verification:
+  - 98/98 automated acceptance tests passed (`scripts/test.ps1`).
+  - 8/8 gameplay playtest scenarios passed (`scripts/test_gameplay.ps1`).
+  - 60-second in-world Survival quickplay executed cleanly on dedicated instance `instances/LivingWorld/`.
+  - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Push Hold strictly maintained.
+Revisit trigger: Cross-settlement trade caravans or naval warfare additions.
+
 

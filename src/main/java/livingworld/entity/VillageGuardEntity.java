@@ -57,6 +57,9 @@ public class VillageGuardEntity extends PathfinderMob {
     private PatrolState patrolState = PatrolState.PATROL;
     private UUID companionDogUuid = null;
     private int lostSightTicks = 0;
+    private long lastTargetSwitchTick = 0;
+    private int targetSwitchCount = 0;
+    private String lastOrientationReason = "Patrol";
 
     public enum GuardRank {
         RECRUIT, SOLDIER, VETERAN, ELITE_GUARD, ROYAL_GUARD
@@ -130,9 +133,24 @@ public class VillageGuardEntity extends PathfinderMob {
         // Tactical Settlement Defense Rally: moves towards alarm coordinate if settlement under attack
         this.goalSelector.addGoal(1, new DefendSettlementGoal(this));
         this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.25, false));
-        this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.75));
-        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f));
-        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.75) {
+            @Override
+            public boolean canUse() {
+                return VillageGuardEntity.this.getTarget() == null && VillageGuardEntity.this.patrolState == PatrolState.PATROL && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0f) {
+            @Override
+            public boolean canUse() {
+                return VillageGuardEntity.this.getTarget() == null && VillageGuardEntity.this.patrolState == PatrolState.PATROL && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this) {
+            @Override
+            public boolean canUse() {
+                return VillageGuardEntity.this.getTarget() == null && VillageGuardEntity.this.patrolState == PatrolState.PATROL && super.canUse();
+            }
+        });
 
         // Priority 1 Target: Retaliate only against non-allied hostiles (friendly-fire filtering)
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this) {
@@ -216,10 +234,24 @@ public class VillageGuardEntity extends PathfinderMob {
         if (target != null && AllegianceRegistry.get().areAllies(this, target)) {
             return; // Reject friendly allied target assignment
         }
+        LivingEntity current = this.getTarget();
+        if (current != null && current.isAlive() && target != null && target != current) {
+            long now = this.level().getGameTime();
+            // Target Hysteresis: retain current target unless new target is high-priority emergency (civilian under attack)
+            boolean emergency = (target instanceof Monster m && m.getTarget() instanceof Villager);
+            if (!emergency && (now - lastTargetSwitchTick) < 30 && this.distanceToSqr(current) <= (maxPursuitDistance * maxPursuitDistance)) {
+                return; // Maintain hysteresis; suppress rapid oscillation and spinning
+            }
+            this.lastTargetSwitchTick = now;
+            this.targetSwitchCount++;
+        }
         super.setTarget(target);
         if (target != null && target.isAlive()) {
             this.patrolState = PatrolState.ENGAGE;
             this.lostSightTicks = 0;
+            this.lastOrientationReason = "Engaging " + target.getType().getDescription().getString();
+        } else {
+            this.lastOrientationReason = "Idle Patrol";
         }
     }
 
@@ -424,6 +456,14 @@ public class VillageGuardEntity extends PathfinderMob {
 
     public void setCompanionDogUuid(UUID companionDogUuid) {
         this.companionDogUuid = companionDogUuid;
+    }
+
+    public int getTargetSwitchCount() {
+        return targetSwitchCount;
+    }
+
+    public String getLastOrientationReason() {
+        return lastOrientationReason;
     }
 
     /**

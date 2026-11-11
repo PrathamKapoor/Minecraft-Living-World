@@ -34,10 +34,22 @@ public class VillageDogEntity extends Wolf {
     private UUID guardHandlerUuid = null;
     private DogRole role = DogRole.CIVILIAN_PET;
     private int followCheckCooldown = 0;
+    private boolean villageBound = true;
+    private boolean notifiedOwnerAboutHome = false;
 
     public enum DogRole {
-        CIVILIAN_PET,
-        GUARD_COMPANION
+        CIVILIAN_PET("Civilian Pet"),
+        GUARD_COMPANION("Guard Companion");
+
+        private final String roleName;
+
+        DogRole(String roleName) {
+            this.roleName = roleName;
+        }
+
+        public String getRoleName() {
+            return roleName;
+        }
     }
 
     public VillageDogEntity(EntityType<? extends Wolf> entityType, Level level) {
@@ -101,9 +113,42 @@ public class VillageDogEntity extends Wolf {
     }
 
     @Override
+    public net.minecraft.world.InteractionResult mobInteract(Player player, net.minecraft.world.InteractionHand hand) {
+        // Guard companion dogs cannot be claimed by players while their military handler lives
+        if (this.role == DogRole.GUARD_COMPANION && this.guardHandlerUuid != null) {
+            LivingEntity handler = getHandlerEntity();
+            if (handler != null && handler.isAlive()) {
+                if (!this.level().isClientSide() && hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+                    player.sendSystemMessage(Component.literal("§eThis guard dog is loyal to its military handler."));
+                }
+                return net.minecraft.world.InteractionResult.PASS;
+            }
+        }
+        return super.mobInteract(player, hand);
+    }
+
+    @Override
+    public Wolf getBreedOffspring(ServerLevel level, net.minecraft.world.entity.AgeableMob otherParent) {
+        VillageDogEntity puppy = LivingWorldEntities.VILLAGE_DOG.create(level, net.minecraft.world.entity.EntitySpawnReason.BREEDING);
+        if (puppy != null) {
+            puppy.setHomeSettlementId(this.homeSettlementId);
+            puppy.setRole(DogRole.CIVILIAN_PET);
+            puppy.setVillageBound(false); // Section 8.3: Puppies born from village dogs are free to leave and travel!
+            var ownerRef = this.getOwnerReference();
+            if (ownerRef != null) {
+                puppy.setOwnerReference(ownerRef);
+                puppy.setTame(true, true);
+            }
+            return puppy;
+        }
+        return super.getBreedOffspring(level, otherParent);
+    }
+
+    @Override
     public void aiStep() {
         super.aiStep();
         if (!this.level().isClientSide()) {
+            // Guard Companion Follow AI & Handler Reassignment
             if (role == DogRole.GUARD_COMPANION && guardHandlerUuid != null) {
                 if (++followCheckCooldown >= 10) {
                     followCheckCooldown = 0;
@@ -122,6 +167,35 @@ public class VillageDogEntity extends Wolf {
                                 if (!AllegianceRegistry.get().areAllies(this, ht)) {
                                     this.setTarget(ht);
                                 }
+                            }
+                        }
+                    } else {
+                        // Handler fell in battle: revert to civilian village dog
+                        this.role = DogRole.CIVILIAN_PET;
+                        this.guardHandlerUuid = null;
+                        this.setCustomName(Component.literal("§6Village Dog"));
+                    }
+                }
+            }
+
+            // Section 8.1 & 8.2: Territorial Village-Bound Behavior for Tamed Adult Dogs
+            if (this.isTame() && this.villageBound) {
+                if (this.homeSettlementId != null && !this.homeSettlementId.isEmpty()) {
+                    livingworld.settlement.Settlement settlement = livingworld.settlement.SettlementManager.get().getSettlement(this.homeSettlementId);
+                    if (settlement != null) {
+                        BlockPos center = settlement.getCenter();
+                        double distSq = this.distanceToSqr(center.getX() + 0.5, center.getY(), center.getZ() + 0.5);
+                        double maxTerritory = (settlement.getRadius() + 12);
+                        if (distSq > (maxTerritory * maxTerritory)) {
+                            // Beyond village territory: return home!
+                            if (!notifiedOwnerAboutHome && this.getOwner() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                                sp.sendSystemMessage(Component.literal("§6[Village Dog] §e" +
+                                    (getCustomName() != null ? getCustomName().getString() : "Village Dog") +
+                                    " turns back home — adult village dogs remain loyal to their village. (Puppies bred here can travel anywhere with you!)"));
+                                notifiedOwnerAboutHome = true;
+                            }
+                            if (this.tickCount % 20 == 0) {
+                                this.getNavigation().moveTo(center.getX() + 0.5, center.getY(), center.getZ() + 0.5, 1.25);
                             }
                         }
                     }
@@ -152,6 +226,8 @@ public class VillageDogEntity extends Wolf {
         output.putString("HomeSettlementId", this.homeSettlementId != null ? this.homeSettlementId : "");
         output.putString("DogRole", this.role.name());
         output.putString("HandlerUuid", this.guardHandlerUuid != null ? this.guardHandlerUuid.toString() : "");
+        output.putBoolean("VillageBound", this.villageBound);
+        output.putBoolean("NotifiedOwnerAboutHome", this.notifiedOwnerAboutHome);
     }
 
     @Override
@@ -169,6 +245,9 @@ public class VillageDogEntity extends Wolf {
                 this.guardHandlerUuid = UUID.fromString(handlerStr);
             } catch (Exception ignored) {}
         }
+
+        this.villageBound = input.getBooleanOr("VillageBound", true);
+        this.notifiedOwnerAboutHome = input.getBooleanOr("NotifiedOwnerAboutHome", false);
 
         if (!this.homeSettlementId.isEmpty() && !this.level().isClientSide()) {
             AllegianceRegistry.get().register(this.getUUID(), homeSettlementId, "VILLAGE_ALLIANCE",
@@ -205,5 +284,13 @@ public class VillageDogEntity extends Wolf {
 
     public void setRole(DogRole role) {
         this.role = role;
+    }
+
+    public boolean isVillageBound() {
+        return villageBound;
+    }
+
+    public void setVillageBound(boolean villageBound) {
+        this.villageBound = villageBound;
     }
 }

@@ -10,6 +10,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -31,9 +32,19 @@ import net.minecraft.world.level.storage.ValueOutput;
  */
 public class VillageCavalryEntity extends VillageGuardEntity {
     public enum CavalryRole {
-        MOUNTED_SWORDSMAN,
-        MOUNTED_SCOUT,
-        MOUNTED_CAPTAIN
+        MOUNTED_SWORDSMAN("Mounted Swordsman"),
+        MOUNTED_SCOUT("Mounted Scout"),
+        MOUNTED_CAPTAIN("Mounted Captain");
+
+        private final String roleName;
+
+        CavalryRole(String roleName) {
+            this.roleName = roleName;
+        }
+
+        public String getRoleName() {
+            return roleName;
+        }
     }
 
     private CavalryRole cavalryRole = CavalryRole.MOUNTED_SWORDSMAN;
@@ -116,7 +127,22 @@ public class VillageCavalryEntity extends VillageGuardEntity {
     public void aiStep() {
         super.aiStep();
         if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel) {
-            // Check mount association
+            // Mounted Navigation Steering: Rider directs horse movement towards targets
+            if (this.isPassenger() && this.getVehicle() instanceof Horse horse) {
+                LivingEntity combatTarget = this.getTarget();
+                if (combatTarget != null && combatTarget.isAlive()) {
+                    horse.getNavigation().moveTo(combatTarget, 1.35);
+                    horse.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
+                    this.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
+                } else if (this.getNavigation().isInProgress()) {
+                    var path = this.getNavigation().getPath();
+                    if (path != null && !horse.getNavigation().isInProgress()) {
+                        horse.getNavigation().moveTo(path, 1.15);
+                    }
+                }
+            }
+
+            // Check mount association & remount logic
             if (++mountCheckCooldown >= 40) {
                 mountCheckCooldown = 0;
                 if (!this.isPassenger() && this.horseUuid != null) {
@@ -129,11 +155,20 @@ public class VillageCavalryEntity extends VillageGuardEntity {
                             this.getNavigation().moveTo(h, 1.3);
                         }
                     } else {
-                        // Mount was destroyed: continue combat on foot
+                        // Mount was destroyed: continue combat on foot cleanly as infantry
                         this.horseUuid = null;
+                        this.setCustomName(Component.literal("§9Veteran Swordsman (Infantry)"));
                     }
                 }
             }
+        }
+    }
+
+    @Override
+    public void stopRiding() {
+        super.stopRiding();
+        if (this.horseUuid != null && !(this.level().isClientSide())) {
+            livingworld.LivingWorldMod.LOGGER.debug("[Living World] Cavalry " + this.getUUID() + " dismounted, transitioning to foot combat.");
         }
     }
 

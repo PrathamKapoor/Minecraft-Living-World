@@ -239,8 +239,83 @@ public class Settlement {
         }
     }
 
+    public boolean hasStructureOverlap(BlockPos origin, int width, int height, int depth) {
+        if (origin == null) return false;
+        int minX = origin.getX() - 2;
+        int maxX = origin.getX() + width + 2;
+        int minY = origin.getY() - 1;
+        int maxY = origin.getY() + height + 2;
+        int minZ = origin.getZ() - 2;
+        int maxZ = origin.getZ() + depth + 2;
+
+        // Check against existing registered buildings
+        for (RegisteredBuilding b : buildings) {
+            Blueprint bp = BlueprintRegistry.get(b.getBlueprintId());
+            int bWidth = bp != null ? bp.getWidth() : 8;
+            int bHeight = bp != null ? bp.getHeight() : 10;
+            int bDepth = bp != null ? bp.getDepth() : 8;
+            BlockPos bPos = b.getPos();
+
+            int bMinX = bPos.getX();
+            int bMaxX = bPos.getX() + bWidth;
+            int bMinY = bPos.getY();
+            int bMaxY = bPos.getY() + bHeight;
+            int bMinZ = bPos.getZ();
+            int bMaxZ = bPos.getZ() + bDepth;
+
+            boolean overlapX = minX <= bMaxX && maxX >= bMinX;
+            boolean overlapY = minY <= bMaxY && maxY >= bMinY;
+            boolean overlapZ = minZ <= bMaxZ && maxZ >= bMinZ;
+
+            if (overlapX && overlapY && overlapZ) {
+                return true; // Overlaps an existing building!
+            }
+        }
+
+        // Check against active construction project
+        if (activeProject != null) {
+            Blueprint bp = BlueprintRegistry.get(activeProject.getBlueprintId());
+            int pWidth = bp != null ? bp.getWidth() : 8;
+            int pHeight = bp != null ? bp.getHeight() : 10;
+            int pDepth = bp != null ? bp.getDepth() : 8;
+            BlockPos pPos = activeProject.getOrigin();
+
+            if (minX <= pPos.getX() + pWidth && maxX >= pPos.getX() &&
+                minY <= pPos.getY() + pHeight && maxY >= pPos.getY() &&
+                minZ <= pPos.getZ() + pDepth && maxZ >= pPos.getZ()) {
+                return true;
+            }
+        }
+
+        // Check against queued construction projects
+        for (ConstructionProject q : constructionQueue) {
+            Blueprint bp = BlueprintRegistry.get(q.getBlueprintId());
+            int pWidth = bp != null ? bp.getWidth() : 8;
+            int pHeight = bp != null ? bp.getHeight() : 10;
+            int pDepth = bp != null ? bp.getDepth() : 8;
+            BlockPos pPos = q.getOrigin();
+
+            if (minX <= pPos.getX() + pWidth && maxX >= pPos.getX() &&
+                minY <= pPos.getY() + pHeight && maxY >= pPos.getY() &&
+                minZ <= pPos.getZ() + pDepth && maxZ >= pPos.getZ()) {
+                return true;
+            }
+        }
+
+        // Check against watchtowers
+        for (BlockPos wt : watchtowers) {
+            if (minX <= wt.getX() + 8 && maxX >= wt.getX() &&
+                minY <= wt.getY() + 16 && maxY >= wt.getY() &&
+                minZ <= wt.getZ() + 8 && maxZ >= wt.getZ()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public BlockPos findClearPlot(ServerLevel level, int width, int depth) {
-        // Search in a spiral around settlement center with full footprint and water rejection
+        // Search in a spiral around settlement center with 3D reservation check and water/roof rejection
         Random random = new Random(id.getMostSignificantBits() + center.asLong());
         for (int attempts = 0; attempts < 32; attempts++) {
             int angleDeg = random.nextInt(360);
@@ -286,8 +361,25 @@ public class Settlement {
                     var groundFluid = level.getFluidState(groundPos);
                     var airFluid = level.getFluidState(groundPos.above());
 
-                    // Ground must be solid and dry (no water/lava on or above foundation)
+                    // Ground must be solid, dry, and natural terrain (NEVER an existing building's roof!)
                     if (!groundState.isSolid() || !groundFluid.isEmpty() || !airFluid.isEmpty()) {
+                        plotValid = false;
+                        break;
+                    }
+
+                    // Anti-Stacking Invariant: Reject if ground block is building material (planks, bricks, slabs, stairs)
+                    if (groundState.is(net.minecraft.world.level.block.Blocks.OAK_PLANKS) ||
+                        groundState.is(net.minecraft.world.level.block.Blocks.SPRUCE_PLANKS) ||
+                        groundState.is(net.minecraft.world.level.block.Blocks.STONE_BRICKS) ||
+                        groundState.is(net.minecraft.world.level.block.Blocks.COBBLESTONE) ||
+                        groundState.is(net.minecraft.world.level.block.Blocks.OAK_SLAB) ||
+                        groundState.is(net.minecraft.world.level.block.Blocks.BRICKS)) {
+                        plotValid = false; // Roof of an existing building!
+                        break;
+                    }
+
+                    // Must have clear sky above ground before construction
+                    if (!level.canSeeSky(groundPos.above())) {
                         plotValid = false;
                         break;
                     }
@@ -300,6 +392,10 @@ public class Settlement {
             // Reject plots with extreme slope (> 4 block variance across footprint)
             if (plotValid && (maxElevation - minElevation <= 4)) {
                 BlockPos plotOrigin = new BlockPos(testX, maxElevation, testZ);
+                // 3D Bounding Box Collision Check: reject if overlapping any existing building or watchtower
+                if (hasStructureOverlap(plotOrigin, width, 12, depth)) {
+                    continue; // Plot overlaps an existing registered building reservation!
+                }
                 livingworld.command.LivingWorldCommand.fillFoundationColumns(level, plotOrigin, width, depth);
                 return plotOrigin;
             }

@@ -54,17 +54,20 @@ public class VillageGolemManager {
         }
 
         if (currentIronGolems.size() < desiredIronGolems) {
-            // Check settlement stone/iron stockpile or natural village defense condition
-            IronGolem newGolem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.EVENT);
-            if (newGolem != null) {
-                newGolem.setPos(center.getX() + level.getRandom().nextInt(7) - 3, center.getY() + 1, center.getZ() + level.getRandom().nextInt(7) - 3);
-                level.addFreshEntity(newGolem);
+            // Safe spawn validation for large Iron Golem (Section 10)
+            BlockPos spawnPos = livingworld.core.SafeSpawnValidation.findSafeSpawnPosition(level, EntityTypes.IRON_GOLEM, center, 14);
+            if (spawnPos != null) {
+                IronGolem newGolem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.EVENT);
+                if (newGolem != null) {
+                    newGolem.setPos(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
+                    level.addFreshEntity(newGolem);
 
-                AllegianceRegistry.get().register(newGolem.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.IRON_GOLEM_DEFENDER);
+                    AllegianceRegistry.get().register(newGolem.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.IRON_GOLEM_DEFENDER);
 
-                level.playSound(null, newGolem.blockPosition(), SoundEvents.IRON_GOLEM_REPAIR, SoundSource.NEUTRAL, 1.0f, 1.0f);
-                level.sendParticles(ParticleTypes.HAPPY_VILLAGER, newGolem.getX(), newGolem.getY() + 1.5, newGolem.getZ(), 16, 0.6, 0.6, 0.6, 0.1);
-                livingworld.LivingWorldMod.LOGGER.info("[Living World] Golem defense mobilized: Iron Golem stationed in " + settlement.getName() + " (" + (currentIronGolems.size() + 1) + "/" + desiredIronGolems + ")");
+                    level.playSound(null, newGolem.blockPosition(), SoundEvents.IRON_GOLEM_REPAIR, SoundSource.NEUTRAL, 1.0f, 1.0f);
+                    level.sendParticles(ParticleTypes.HAPPY_VILLAGER, newGolem.getX(), newGolem.getY() + 1.5, newGolem.getZ(), 16, 0.6, 0.6, 0.6, 0.1);
+                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Golem defense mobilized: Iron Golem stationed in " + settlement.getName() + " (" + (currentIronGolems.size() + 1) + "/" + desiredIronGolems + ")");
+                }
             }
         }
 
@@ -79,16 +82,19 @@ public class VillageGolemManager {
             }
 
             if (currentSnowGolems.size() < desiredSnowGolems) {
-                SnowGolem snowGolem = EntityTypes.SNOW_GOLEM.create(level, EntitySpawnReason.EVENT);
-                if (snowGolem != null) {
-                    snowGolem.setPos(center.getX() + level.getRandom().nextInt(9) - 4, center.getY() + 1, center.getZ() + level.getRandom().nextInt(9) - 4);
-                    level.addFreshEntity(snowGolem);
+                BlockPos spawnPos = livingworld.core.SafeSpawnValidation.findSafeSpawnPosition(level, EntityTypes.SNOW_GOLEM, center, 14);
+                if (spawnPos != null) {
+                    SnowGolem snowGolem = EntityTypes.SNOW_GOLEM.create(level, EntitySpawnReason.EVENT);
+                    if (snowGolem != null) {
+                        snowGolem.setPos(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
+                        level.addFreshEntity(snowGolem);
 
-                    AllegianceRegistry.get().register(snowGolem.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.SNOW_GOLEM_DEFENDER);
+                        AllegianceRegistry.get().register(snowGolem.getUUID(), settlement.getId().toString(), "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.SNOW_GOLEM_DEFENDER);
 
-                    level.playSound(null, snowGolem.blockPosition(), SoundEvents.SNOW_GOLEM_AMBIENT, SoundSource.NEUTRAL, 1.0f, 1.1f);
-                    level.sendParticles(ParticleTypes.SNOWFLAKE, snowGolem.getX(), snowGolem.getY() + 1.0, snowGolem.getZ(), 16, 0.4, 0.4, 0.4, 0.05);
-                    livingworld.LivingWorldMod.LOGGER.info("[Living World] Cold-climate defense mobilized: Snow Golem sentry stationed in " + settlement.getName());
+                        level.playSound(null, snowGolem.blockPosition(), SoundEvents.SNOW_GOLEM_AMBIENT, SoundSource.NEUTRAL, 1.0f, 1.1f);
+                        level.sendParticles(ParticleTypes.SNOWFLAKE, snowGolem.getX(), snowGolem.getY() + 1.0, snowGolem.getZ(), 16, 0.4, 0.4, 0.4, 0.05);
+                        livingworld.LivingWorldMod.LOGGER.info("[Living World] Cold-climate defense mobilized: Snow Golem sentry stationed in " + settlement.getName());
+                    }
                 }
             }
         }

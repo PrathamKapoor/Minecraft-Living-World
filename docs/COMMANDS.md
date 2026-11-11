@@ -130,12 +130,28 @@ All Living World commands are registered under the root `/livingworld` command t
 | Command | Permission | Description |
 |---|---|---|
 | `/livingworld armory stock` | All | Displays physical armory inventory (iron/diamond swords, bows, arrows, shields, armor pieces, splash healing potions) and gear availability for new recruits. |
-| `/livingworld professions list` | All | Displays the complete 13-profession demographic census (Farmer, Fisherman, Fletcher, Shepherd, Butcher, Leatherworker, Librarian, Cartographer, Cleric, Armorer, Weaponsmith, Toolsmith, Mason) with staffed/deficit statuses. |
+| `/livingworld professions list` | All | Displays the complete 13-profession demographic census (Farmer, Fisherman, Fletcher, Shepherd, Butcher, Leatherworker, Librarian, Cartographer, Cleric, Armorer, Weaponsmith, Toolsmith, Mason) with staffed/deficit statuses and authentic understaffed diagnostics (insufficient population, missing materials, awaiting workstation). |
 | `/livingworld golems status` | All | Displays active Iron Golem and Snow Golem defense forces, calculated quotas, climate conditions, and health status for the settlement. |
 
 ---
 
-## 8. Version 0.2.7 The Siege & Settlement Reliability Debug Commands
+## 8. Version 0.2.8 Living World Defense, Distress & Reputation Commands
+
+### Defense Intelligence, Threats & Distress Signalling
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld defense threats` | All | Displays real-time tracked hostile threats across the settlement: threat UUID, mob type, coordinates, threat severity score, assigned defenders, and breaching/commander flags. |
+| `/livingworld defense distress` | All | Displays civilian distress monitoring: total deduplicated distress calls emitted, currently active emergency incidents, and emergency responder dispatch status. |
+| `/livingworld defense shelters` | All | Displays civilian shelter census across all 5 operational states: `WORKING`, `THREAT_DETECTED`, `SEEKING_SHELTER`, `SHELTERED`, and `RECOVERY`. |
+
+### Player Reputation & Heroic Standing
+| Command | Permission | Description |
+|---|---|---|
+| `/livingworld reputation` | All | Displays the player's earned trust points in the local settlement, current heroic standing title (`Recognized Visitor`, `Trusted Ally`, `Village Protector`, `Honored Defender`), and progress toward the next celebration milestone (25, 50, 100, 200). |
+
+---
+
+## 9. Version 0.2.7 The Siege & Settlement Reliability Debug Commands
 
 ### Tactical Raid & Bell Siege Diagnostics
 | Command | Permission | Description |

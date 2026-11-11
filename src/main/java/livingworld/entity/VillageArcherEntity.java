@@ -69,6 +69,9 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
     private int lostSightTicks = 0;
     private int hornAnimationTicks = 0;
     private int hornCooldown = 0;
+    private long lastTargetSwitchTick = 0;
+    private int targetSwitchCount = 0;
+    private String lastOrientationReason = "Patrol";
 
     public VillageArcherEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
         super(entityType, level);
@@ -133,9 +136,24 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
         this.goalSelector.addGoal(3, new DefendSettlementGoal(this));
         // Authentic Bow Combat Goal: manages bow draw, aiming, and tension curves
         this.goalSelector.addGoal(4, new VillageArcherBowAttackGoal(this, 1.0, 25, 32.0f));
-        this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.7));
-        this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0f));
-        this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.7) {
+            @Override
+            public boolean canUse() {
+                return !VillageArcherEntity.this.isWatchtowerSentry && VillageArcherEntity.this.getTarget() == null && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0f) {
+            @Override
+            public boolean canUse() {
+                return !VillageArcherEntity.this.isWatchtowerSentry && VillageArcherEntity.this.getTarget() == null && super.canUse();
+            }
+        });
+        this.goalSelector.addGoal(8, new RandomLookAroundGoal(this) {
+            @Override
+            public boolean canUse() {
+                return !VillageArcherEntity.this.isWatchtowerSentry && VillageArcherEntity.this.getTarget() == null && super.canUse();
+            }
+        });
 
         // Priority 1: Retaliate only against non-allied hostiles (friendly-fire filtering)
         this.targetSelector.addGoal(1, new HurtByTargetGoal(this) {
@@ -203,10 +221,24 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
         if (target != null && AllegianceRegistry.get().areAllies(this, target)) {
             return; // Reject friendly allied target assignment
         }
+        LivingEntity current = this.getTarget();
+        if (current != null && current.isAlive() && target != null && target != current) {
+            long now = this.level().getGameTime();
+            // Target Hysteresis: retain current target unless new target is high-priority emergency (civilian under attack)
+            boolean emergency = (target instanceof Monster m && m.getTarget() instanceof Villager);
+            if (!emergency && (now - lastTargetSwitchTick) < 30 && this.distanceToSqr(current) <= (maxPursuitDistance * maxPursuitDistance)) {
+                return; // Maintain hysteresis; suppress rapid oscillation and spinning
+            }
+            this.lastTargetSwitchTick = now;
+            this.targetSwitchCount++;
+        }
         super.setTarget(target);
         if (target != null && target.isAlive()) {
             this.patrolState = VillageGuardEntity.PatrolState.ENGAGE;
             this.lostSightTicks = 0;
+            this.lastOrientationReason = "Engaging " + target.getType().getDescription().getString();
+        } else {
+            this.lastOrientationReason = "Idle Patrol";
         }
     }
 
@@ -468,6 +500,14 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
         this.companionDogUuid = dogUuid;
     }
 
+    public int getTargetSwitchCount() {
+        return targetSwitchCount;
+    }
+
+    public String getLastOrientationReason() {
+        return lastOrientationReason;
+    }
+
     /**
      * Tactical Kiting AI: Maintains safe standoff distance when enemies close in.
      */
@@ -480,10 +520,12 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
             this.mob = mob;
             this.speedModifier = speedModifier;
             this.safeDistance = safeDistance;
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
         }
 
         @Override
         public boolean canUse() {
+            if (mob instanceof VillageArcherEntity va && va.isWatchtowerSentry()) return false;
             LivingEntity target = mob.getTarget();
             if (target == null || !target.isAlive()) return false;
             return mob.distanceToSqr(target) < (safeDistance * safeDistance);
@@ -661,7 +703,11 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
                 this.seeTime = 0;
             }
 
-            if (distSqr <= (double)this.attackRadiusSqr && this.seeTime >= 20) {
+            if (this.archer.isWatchtowerSentry()) {
+                // Elevated Lookout Sentry: hold position firmly on watchtower platform, aim cleanly down at target
+                this.archer.getNavigation().stop();
+                this.archer.getLookControl().setLookAt(target, 30.0f, 30.0f);
+            } else if (distSqr <= (double)this.attackRadiusSqr && this.seeTime >= 20) {
                 this.archer.getNavigation().stop();
                 ++this.strafingTime;
             } else {
@@ -669,7 +715,7 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
                 this.strafingTime = -1;
             }
 
-            if (this.strafingTime >= 20) {
+            if (!this.archer.isWatchtowerSentry() && this.strafingTime >= 20) {
                 if (this.archer.getRandom().nextFloat() < 0.3) {
                     this.strafingClockwise = !this.strafingClockwise;
                 }
@@ -679,14 +725,14 @@ public class VillageArcherEntity extends PathfinderMob implements RangedAttackMo
                 this.strafingTime = 0;
             }
 
-            if (this.strafingTime > -1) {
+            if (!this.archer.isWatchtowerSentry() && this.strafingTime > -1) {
                 if (distSqr > (double)(this.attackRadiusSqr * 0.75f)) {
                     this.strafingBackwards = false;
                 } else if (distSqr < (double)(this.attackRadiusSqr * 0.25f)) {
                     this.strafingBackwards = true;
                 }
                 this.archer.getMoveControl().strafe(this.strafingBackwards ? -0.5f : 0.5f, this.strafingClockwise ? 0.5f : -0.5f);
-                this.archer.lookAt(target, 30.0f, 30.0f);
+                this.archer.getLookControl().setLookAt(target, 30.0f, 30.0f);
             } else {
                 this.archer.getLookControl().setLookAt(target, 30.0f, 30.0f);
             }

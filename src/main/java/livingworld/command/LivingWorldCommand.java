@@ -168,7 +168,11 @@ public class LivingWorldCommand {
                     .then(Commands.literal("alarm")
                         .then(Commands.literal("on").executes(ctx -> executeDefenseAlarm(ctx, true)))
                         .then(Commands.literal("off").executes(ctx -> executeDefenseAlarm(ctx, false))))
-                    .then(Commands.literal("sentries").executes(LivingWorldCommand::executeDefenseSentries)))
+                    .then(Commands.literal("sentries").executes(LivingWorldCommand::executeDefenseSentries))
+                    .then(Commands.literal("threats").executes(LivingWorldCommand::executeDefenseThreats))
+                    .then(Commands.literal("distress").executes(LivingWorldCommand::executeDefenseDistress))
+                    .then(Commands.literal("shelters").executes(LivingWorldCommand::executeDefenseShelters)))
+                .then(Commands.literal("reputation").executes(LivingWorldCommand::executeReputation))
                 .then(Commands.literal("military")
                     .then(Commands.literal("allegiance").executes(LivingWorldCommand::executeMilitaryAllegiance))
                     .then(Commands.literal("recruit")
@@ -210,7 +214,7 @@ public class LivingWorldCommand {
 
     private static int executeStatus(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
-        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.7)"), false);
+        source.sendSuccess(() -> Component.literal("§6[Living World] §aMod Status: Active (v0.2.8)"), false);
         source.sendSuccess(() -> Component.literal("§7Target: Minecraft 26.3 | Fabric 0.20.1 | Java 25"), false);
         int villageCount = SettlementManager.get().getAllSettlements().size();
         source.sendSuccess(() -> Component.literal("§7Active Settlements: §e" + villageCount), false);
@@ -1058,6 +1062,119 @@ public class LivingWorldCommand {
         return 1;
     }
 
+    private static int executeDefenseThreats(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+
+        var state = livingworld.faction.VillageDefenseController.get().getState(s.getId());
+        var threats = state.getThreatRecords();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Active Threats: " + s.getName() + " (" + threats.size() + ") ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Threat Level: " + state.getThreatLevel().getDisplay() + " | Lockdown: " + (state.isLockdownActive() ? "§cACTIVE" : "§aINACTIVE")), false);
+        int idx = 0;
+        for (var tr : threats.values()) {
+            final int currentIdx = ++idx;
+            BlockPos tp = tr.getLocation();
+            source.sendSuccess(() -> Component.literal(String.format("§7  #%d: %s at (%d, %d, %d) | Severity: %.1f | Assigned Defenders: %d%s%s%s",
+                currentIdx, tr.getEntityType().getDescription().getString(),
+                tp != null ? tp.getX() : 0, tp != null ? tp.getY() : 0, tp != null ? tp.getZ() : 0,
+                tr.getSeverity(), tr.getAssignedDefenders().size(),
+                tr.isCommander() ? " §c[COMMANDER]" : "",
+                tr.isBreaching() ? " §e[BREACHING]" : "",
+                tr.getVictimUuid() != null ? " §4[ATTACKING CIVILIAN]" : "")), false);
+        }
+        if (threats.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("§a  Perimeter secure. No active hostile threats detected within 80m."), false);
+        }
+        return 1;
+    }
+
+    private static int executeDefenseDistress(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int total = livingworld.faction.CivilianDistressManager.get().getTotalDistressEmitted();
+        var incidents = livingworld.faction.CivilianDistressManager.get().getActiveIncidents();
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Civilian Distress Diagnostics ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Total Distress Signals Emitted: §e" + total), false);
+        source.sendSuccess(() -> Component.literal("§7  Active Distress Incidents: §c" + incidents.size()), false);
+        int idx = 0;
+        for (var inc : incidents.values()) {
+            final int currentIdx = ++idx;
+            source.sendSuccess(() -> Component.literal(String.format("§7  Incident #%d: Victim %s | Attacker %s | %s",
+                currentIdx, inc.getVictimUuid().toString().substring(0, 8),
+                inc.getAttackerUuid().toString().substring(0, 8),
+                inc.isAcknowledged() ? "§aAcknowledged" : "§cActive")), false);
+        }
+        return 1;
+    }
+
+    private static int executeDefenseShelters(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        BlockPos pos = BlockPos.containing(source.getPosition());
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found."));
+            return 0;
+        }
+
+        var villagers = level.getEntitiesOfClass(net.minecraft.world.entity.npc.villager.Villager.class,
+            AABB.ofSize(new Vec3(s.getCenter().getX(), s.getCenter().getY(), s.getCenter().getZ()), s.getRadius() * 2, 40, s.getRadius() * 2));
+
+        int working = 0, threatDetected = 0, seeking = 0, sheltered = 0, recovery = 0;
+        for (var v : villagers) {
+            var state = livingworld.faction.CivilianShelterManager.get().getCivilianState(v.getUUID());
+            switch (state) {
+                case WORKING -> working++;
+                case THREAT_DETECTED -> threatDetected++;
+                case SEEKING_SHELTER -> seeking++;
+                case SHELTERED -> sheltered++;
+                case RECOVERY -> recovery++;
+            }
+        }
+        final int fWorking = working;
+        final int fThreatDetected = threatDetected;
+        final int fSeeking = seeking;
+        final int fSheltered = sheltered;
+        final int fRecovery = recovery;
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Civilian Shelter Census: " + s.getName() + " (" + villagers.size() + " villagers) ==="), false);
+        source.sendSuccess(() -> Component.literal("§a  Working: §f" + fWorking), false);
+        source.sendSuccess(() -> Component.literal("§e  Threat Detected: §f" + fThreatDetected), false);
+        source.sendSuccess(() -> Component.literal("§6  Seeking Shelter: §f" + fSeeking), false);
+        source.sendSuccess(() -> Component.literal("§c  Sheltered: §f" + fSheltered), false);
+        source.sendSuccess(() -> Component.literal("§b  Recovery: §f" + fRecovery), false);
+        return 1;
+    }
+
+    private static int executeReputation(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        if (source.getPlayer() == null) {
+            source.sendFailure(Component.literal("§cCommand must be executed by a player."));
+            return 0;
+        }
+        ServerPlayer player = source.getPlayer();
+        BlockPos pos = player.blockPosition();
+        Settlement s = SettlementManager.get().getNearestSettlement(pos);
+        if (s == null) {
+            source.sendFailure(Component.literal("§6[Living World] §cNo active settlement found nearby."));
+            return 0;
+        }
+
+        int rep = livingworld.faction.ReputationManager.get().getReputation(player.getUUID(), s.getId());
+        String title = livingworld.faction.ReputationManager.get().getMilestoneTitle(rep);
+        boolean hostile = livingworld.faction.ReputationManager.get().isHostileToPlayer(player);
+
+        source.sendSuccess(() -> Component.literal("§6[Living World] §e=== Village Standing: " + s.getName() + " ==="), false);
+        source.sendSuccess(() -> Component.literal("§7  Player: §f" + player.getName().getString()), false);
+        source.sendSuccess(() -> Component.literal("§7  Standing: §l§a" + title + " §r§7(Trust: §e" + rep + "§7)"), false);
+        source.sendSuccess(() -> Component.literal("§7  Disposition: " + (hostile ? "§cHOSTILE" : "§aWELCOMING")), false);
+        source.sendSuccess(() -> Component.literal("§7  Milestones: §8[25: Recognized Visitor | 50: Trusted Friend | 100: Village Ally | 200: Honored Defender]"), false);
+        return 1;
+    }
+
     private static int executeMilitaryAllegiance(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         var allDefenders = livingworld.faction.AllegianceRegistry.get().getAllDefenders();
@@ -1158,8 +1275,13 @@ public class LivingWorldCommand {
         source.sendSuccess(() -> Component.literal("§7  Staffed Professions (2+ adults): §a" + census.getStaffedProfessionsCount() + "/13"), false);
         for (var prof : livingworld.economy.VillageWorkforceManager.ManagedProfession.values()) {
             int count = census.getCount(prof);
+            String diagnostic = "";
+            if (count < 2) {
+                diagnostic = " §8[" + livingworld.economy.VillageWorkforceManager.get().getUnderstaffedDiagnostic(s, prof, census) + "]";
+            }
             String status = count >= 2 ? "§a" + count + " §7(Staffed)" : (count == 1 ? "§e1 §7(Needs 1)" : "§c0 §7(Deficit)");
-            source.sendSuccess(() -> Component.literal("    • " + prof.getTitle() + ": " + status), false);
+            final String diag = diagnostic;
+            source.sendSuccess(() -> Component.literal("    • " + prof.getTitle() + ": " + status + diag), false);
         }
         return 1;
     }

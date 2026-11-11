@@ -238,6 +238,10 @@ public class SettlementManager {
             int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
             if (surfaceY >= 62) {
                 BlockPos origin = new BlockPos(cand.getX(), surfaceY, cand.getZ());
+                // Structure Reservation Check: reject if overlapping any existing building or project
+                if (settlement.hasStructureOverlap(origin, bp.getWidth(), bp.getHeight(), bp.getDepth())) {
+                    continue;
+                }
                 if (level.isLoaded(origin) && !ProtectionManager.get().isProtectedBlock(level, origin)) {
                     livingworld.command.LivingWorldCommand.fillFoundationColumns(level, origin, bp.getWidth(), bp.getDepth());
                     for (var entry : bp.getBlocks().entrySet()) {
@@ -250,8 +254,8 @@ public class SettlementManager {
                     settlement.addBuilding("archer_watchtower", origin, true, 0);
                     needed--;
 
-                    // Post an elevated sentry archer on the lookout platform (y=10)
-                    BlockPos platformPos = origin.offset(3, 10, 3);
+                    // Post an elevated sentry archer on the lookout platform (y=10) on solid standing planks (x=3, z=2)
+                    BlockPos platformPos = origin.offset(3, 10, 2);
                     if (level.isLoaded(platformPos)) {
                         livingworld.entity.VillageArcherEntity sentry = livingworld.entity.LivingWorldEntities.VILLAGE_ARCHER.create(level, net.minecraft.world.entity.EntitySpawnReason.EVENT);
                         if (sentry != null) {
@@ -269,6 +273,31 @@ public class SettlementManager {
                 }
             }
         }
+    }
+
+    /**
+     * Automated Line-of-Sight Evaluation for Watchtower Lookout Posts (Section 2.2).
+     * Validates that elevated lookout positions have unobstructed firing sectors across approach vectors.
+     */
+    public static boolean validateWatchtowerSightlines(ServerLevel level, BlockPos sentryEyePos) {
+        if (level == null || sentryEyePos == null) return false;
+        int clearSectors = 0;
+        int[][] directions = {{0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}};
+
+        for (int[] dir : directions) {
+            boolean obstructed = false;
+            for (int step = 1; step <= 16; step++) {
+                BlockPos probe = sentryEyePos.offset(dir[0] * step, 0, dir[1] * step);
+                if (level.isLoaded(probe) && level.getBlockState(probe).isSolid()) {
+                    if (step <= 3) {
+                        obstructed = true; // Immediate architectural blockage (fence, wall, roof)
+                        break;
+                    }
+                }
+            }
+            if (!obstructed) clearSectors++;
+        }
+        return clearSectors >= 3; // At least 3 unobstructed sectors
     }
 
     public void save(ServerLevel level) {

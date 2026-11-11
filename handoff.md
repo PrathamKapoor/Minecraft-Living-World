@@ -1,28 +1,30 @@
-# HANDOFF.md — Living World v0.2.7 Engineering Handoff Document
+# HANDOFF.md — Living World v0.2.8 Engineering Handoff Document
 
 **Project:** Minecraft: Living World  
-**Release:** Version 0.2.7 — The Siege & Settlement Reliability Update  
+**Release:** Version 0.2.8 — Operation: Make the World Actually Alive (Stabilization & Quality Overhaul)  
 **Target Platform:** Minecraft Java Edition 26.3 / Fabric Loader 0.20.1 / Java 25  
 **Instance Path:** `instances/LivingWorld/` (Dedicated, isolated instance)  
-**Latest Verified Artifact:** `instances/LivingWorld/minecraft/mods/livingworld-0.2.7.jar` (380,764 bytes, 78 compiled classes)  
-**Rollback Artifact:** `backup_v0.2.6/livingworld-0.2.6.jar` (357,654 bytes)  
+**Latest Verified Artifact:** `instances/LivingWorld/minecraft/mods/livingworld-0.2.8.jar` (415,983 bytes, 81 compiled classes)  
+**Rollback Artifact:** `backup_v0.2.8/livingworld-0.2.8.jar` (415,983 bytes, SHA256: `CDBBD0A2DE1F2C6C0E81FE7C6E16D9CA6C3179D76A5C2C696716A4BB7C9A68DB`)  
 **Git Repository:** `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)  
 **Push Hold Status:** **ACTIVE (STRICT)** — All commits created locally. Zero pushes to remote repository until user explicitly commands `"PUSH"`.
 
 ---
 
 ## 1. Executive Summary
-Living World v0.2.7 resolves all 10 real-gameplay defects (`DEF-01` through `DEF-10`) identified during hands-on creator playtesting. The update makes previously promised gameplay tangible in-world:
-1. Illagers now possess a strategic macro-level raid objective: **Attacking the Village Bell**.
-2. A coordinated 7-state assault machine (`ASSEMBLE -> ADVANCE -> ENGAGE_DEFENDERS -> BREACH -> ATTACK_BELL -> SECURE_VILLAGE -> VICTORY`) directs pillagers and illagers along village roads.
-3. Physical bell siege mechanic with visible attack animations, metallic hit sounds, debris/silencing, and community material-driven reconstruction.
-4. Stuck raiders are automatically detected via a 160m navigation diagnostic engine with 3-tiered resolution (200t surface recovery, 600t glowing outline + horn warning, 1200t failsafe discard), completely eliminating hanging raid boss bars.
-5. Every qualifying settlement automatically maintains **two lookout watchtowers** with solid ladder backing columns, lookout platforms at y=10, and stationed archer sentries.
-6. Settlements naturally maintain **2–4 civilian dogs** and **1 guard companion war dog per 4 melee guards**.
-7. Settlements naturally mobilize **mounted cavalry** (Swordsmen, Scouts, Captains) riding armored, saddled horses when military capacity >= 3.
-8. Blueprint architectural integrity overhaul across all 24 blueprints, fixing missing roofs, open sky gaps, missing doors, and unattached ladders.
-9. All 10 administrative diagnostic commands registered under `/livingworld debug ...`.
-10. All 88 automated acceptance tests, all 8 gameplay playtest scenarios, and a 60-second in-world Survival simulation passed with zero errors.
+Living World v0.2.8 executes a comprehensive stabilization and quality overhaul across all gameplay systems, addressing 12 critical real-gameplay defects identified during hands-on creator playtesting:
+1. **Watchtower Defensive Architecture**: Complete rebuild providing 2 full blocks of unobstructed standing headroom (y=11..12), roof slab at y=13, lantern suspended high at ceiling with zero floor obstruction, parapets with 8-direction firing ports, and raycast line-of-sight validation.
+2. **Anti-Spinning AI & Target Hysteresis**: Eliminated erratic guard/archer spinning by enforcing 30-tick target preservation hysteresis, 20-tick defense rally throttling, and strictly gating idle stroll/look goals to non-combat states.
+3. **Authoritative Threat Allocation**: Shared settlement `ThreatRecord` state tracking severity, breaching status, horde membership, and assigned defenders, preventing entire garrisons from swarming a single zombie while hordes attack civilians.
+4. **Civilian Distress Signalling**: Deduplicated emergency distress events (1 per incident, 300-tick cooldown) with authentic audio/particles, dispatching 1–2 nearest defenders to intercept attackers.
+5. **5-State Civilian Shelter Lifecycle**: Autonomous lifecycle (`WORKING -> THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING`) routing to interior safe buildings and coordinating door closures with a 40-tick anti-thrashing cooldown.
+6. **Safe Spawn Clearance Engine**: Multi-block bounding box clearance and solid footing checks with extra vertical headroom (>= 1.0m) for large mobs (Iron Golems, Mutant Commanders), completely preventing wall/ceiling suffocation.
+7. **Cavalry Alignment & Mounted Steering**: Configured `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)` across all humanoid riders, eliminating the 0.7m vertical floating gap above saddles. Rider transfers navigation and combat targets directly to horse mounts.
+8. **Territorial Village Dogs & Free-Roaming Puppies**: Adult village dogs remain tethered to settlement territory with gentle boundary reminders; guard dogs remain loyal to handlers; bred puppies inherit free-roaming status.
+9. **Natural Village Defense Reputation**: Organic trust awarded for defending settlements (+1 to +10) with quiet milestone announcements and titles at 25, 50, 100, and 200 points.
+10. **3D Structure Reservations**: Persistent 3D bounding box checks preventing building overlap and rejecting roof elevations during plot surveying.
+11. **Dimensional Scars Redesign**: Noise-blended Soul Sand Valley with 4 fossil types (rib cages, vertebrae, tusks, fragments), Crimson/Warped trees (5–11m tall with stepped drooping caps), and strict water safeguards preventing floating stone slabs over rivers or oceans.
+12. **Meaningful Profession Activities & Diagnostics**: Daytime work hours (2000–9000 ticks) consuming raw materials (wood for arrows, iron for gear) with genuine diagnostics for understaffed trades.
 
 ---
 
@@ -30,100 +32,114 @@ Living World v0.2.7 resolves all 10 real-gameplay defects (`DEF-01` through `DEF
 
 | Defect ID | Title | Root Cause & Resolution | Verification |
 |---|---|---|---|
-| **DEF-01** | Illagers fail to reach village / wander in forest | Vanilla nearest-mob targeting distracted raiders into forests/caves. Replaced with macro-level `RaidObjective` bell routing along surface terrain. | `Test 79`, `Scenario 8` |
-| **DEF-02** | Raids remain active with trapped/lost raiders | Mobs trapped in subterranean caverns could not exit. Implemented 160m `RaiderDiagnostic` with 200t surface recovery, 600t glowing outline, and 1200t failsafe resolution. | `Test 81`, `Scenario 8` |
-| **DEF-03** | Pillagers lack meaningful tactical objectives | Illagers acted as disconnected brawlers. Implemented 7-state tactical assault machine and physical bell attack strikes (100t threshold). | `Test 79`, `Test 80` |
-| **DEF-04** | Village watchtowers do not reliably generate | Watchtowers were only attempted once during initial village discovery when perimeter chunks were unloaded. Added periodic pass in `SettlementManager.tick()` (every 200t) ensuring 2 watchtowers. | `Test 82`, `Scenario 8` |
-| **DEF-05** | Village cavalry does not naturally appear | Missing automated mobilization trigger in recruitment loop. Added cavalry mobilization in `VillageGuardManager` when military capacity >= 3. | `Test 84`, `Scenario 8` |
-| **DEF-06** | Village dogs and military companions do not appear | Entities registered but not ticked by demographic engine. Implemented `tickSettlementDogs()` maintaining 2-4 civilian dogs and 1 guard companion per 4 guards. | `Test 83`, `Scenario 8` |
-| **DEF-07** | Several houses incomplete, visually malformed, or open | Blueprint wall/roof loops omitted doors, ladders, and solid ceilings in `barracks`, `farmhouse`, `two_story_house`, `inn`, `clinic`. Added complete roofs and valid doors. | `Test 85`, `Scenario 8` |
-| **DEF-08** | Villager and illager AI remains unreliable | Competing AI goals constantly cleared navigation targets. Centralized objective movement in `RaidTactics.tickRaidTactics()` with role-specific speeds and vindicator door breaches. | `Test 79`, `Test 81` |
-| **DEF-09** | Guards and defenders fail to coordinate | Threat scoring treated all monsters equally. Implemented dynamic scoring in `VillageDefenseController` prioritizing boss mobs (15x), miners (6x), and civilian threats (+8x). | `Test 86`, `Scenario 8` |
-| **DEF-10** | Iron golem water-navigation defects | Unchecked block loading during water searches caused potential chunk stalls. Added `level.isLoaded(p)` guards and 0.20 vertical buoyancy impulse. | `Test 74`, `Test 88` |
+| **CRIT-01** | Non-functional Watchtowers | Platform at y=10 had low ceiling, obstructing lanterns and doors on floor. Overhauled blueprint with 2 full blocks of standing headroom (y=11..12), roof at y=13, lantern suspended at ceiling, and raycast line-of-sight checks. | `Test 92`, Visual Audit |
+| **CRIT-02** | Guards & Archers Randomly Spinning | LookAtPlayer, RandomLookAround, and stroll goals fought combat targets; target cleared tick-by-tick. Gated idle goals to non-combat states and implemented 30-tick target hysteresis. | `Test 91`, AI Regression |
+| **CRIT-03** | Tactically Incompetent Soldiers | Every defender independently targeted nearest mob without situational awareness. Implemented authoritative `ThreatRecord` settlement state and intelligent defender distribution. | `Test 86`, `Test 91` |
+| **CRIT-04** | Civilians Lack Distress Signalling | Villagers took damage silently without alerting nearby soldiers. Implemented `CivilianDistressManager` with 300t deduplication, physical panic reaction, and responder dispatch. | `Test 89`, Distress Audit |
+| **CRIT-05** | Civilians Fail to Shelter / Door Thrashing | Villagers wandered outside during raids; open-close door thrashing occurred. Implemented 5-state shelter machine and 40-tick door closure cooldown. | `Test 90`, Shelter Audit |
+| **CRIT-06** | Large Entities Spawning in Walls | Golems and Mutant Commanders spawned using single-block checks. Created `SafeSpawnValidation` requiring solid footing, full bounding box, and >=1.0m extra headroom. | `Test 94`, Collision Audit |
+| **CRIT-07** | Floating Cavalry (0.7m Above Saddle) | Missing vehicle riding offset on EntityType. Registered `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)`; forward navigation targets to horse mounts. | `Test 93`, Render Audit |
+| **CRIT-08** | Village Dog Ownership & Taming Issues | Village dogs could be tamed away by accident; guard dogs deserted handlers. Set `villageBound=true` for village dogs, protected guard dogs, and made bred puppies free-roaming. | `Test 95`, Pets Audit |
+| **CRIT-09** | Missing Reputation for Village Defense | Players received zero recognition for saving settlements. Implemented organic trust rewards (+1 to +10) with silent accumulation and milestone honors at 25, 50, 100, 200. | `Test 96`, Reputation Audit |
+| **CRIT-10** | Stacked Buildings on House Roofs | Heightmap returned roof elevations as ground. Added 3D bounding box reservation checks and roof material rejection in `findClearPlot()`. | `Test 97`, Architecture Audit |
+| **CRIT-11** | Dimensional Scars Flat Slabs on Water | Surface heightmap placed netherrack on water surfaces. Added fluid detection tracing to seabed and implemented 4 varied fossil types and stepped canopies. | `Test 98`, Scar Audit |
+| **CRIT-12** | Superficial Profession Activities | Workforce lacked material consumption, working hours, and real diagnostics. Enforced daytime hours, wood/iron consumption, and genuine understaffed diagnostic causes. | `Test 75`, Workforce Audit |
 
 ---
 
 ## 3. Core Architectural Implementations
 
-### A. Village Bell Raid Objective & 7-State Assault Machine (`RaidTactics.java`)
-- `findVillageBell(level, center, radius)`: Scans village volume to locate physical `Blocks.BELL`.
-- `RaidObjective`: Registers target bell coordinate, physical presence, assault state, and active raiders.
-- 7 Tactical States:
-  1. `ASSEMBLE`: Gathering invasion forces at raid spawn perimeter.
-  2. `ADVANCE`: Moving along village roads toward target bell (pillagers: 1.15 speed, shieldbearers: 1.10 speed, vindicators: 1.25 speed).
-  3. `ENGAGE_DEFENDERS`: Clashing with village guards, archers, and golems.
-  4. `BREACH`: Vindicators breaking wooden doors with axe strikes and sounds.
-  5. `ATTACK_BELL`: Melee units within 3.5m assaulting the village bell.
-  6. `SECURE_VILLAGE`: Bell neutralized; mopping up surviving civilian defenders.
-  7. `VICTORY`: Raid victory declared.
-- Physical Bell Strike Mechanic (`performBellAssault`):
-  - Visible main-hand swing animation.
-  - Metallic clang audio (`SoundEvents.BELL_BLOCK`) and critical hit particles.
-  - At 100 ticks (5s sustained assault):
-    - `mobGriefing=true`: Block destroyed with `SoundEvents.ANVIL_DESTROY` and explosion particles.
-    - `mobGriefing=false`: Bell silenced with `SoundEvents.BELL_RESONATE`.
-- Community Reconstruction: Surviving villagers consume 5 stone or 1 iron from stockpiles to reconstruct the bell at its original position.
+### A. Watchtower Defensive Architecture (`BlueprintRegistry.java`, `SettlementManager.java`)
+- Redesigned `archer_watchtower` and `watchtower` blueprints.
+- Floor positioned at y=10.
+- Clear standing headroom at y=11 and y=12 (100% air).
+- Roof slab positioned at y=13.
+- Lantern suspended from y=13 ceiling with zero platform or eye-level obstruction.
+- Parapets provide 8-direction firing ports.
+- Automated raycast line-of-sight validation verifies outward visibility in 8 directions.
 
-### B. 160m Stuck Raider Navigation Diagnostics (`RaidTactics.java`)
-- `RaiderDiagnostic`: Tracks UUID, entity type, position, distance to bell, stationary ticks, underground status, and trapped flag.
-- Three-tiered recovery escalation:
-  - **T1 (> 200 ticks)**: If underground (`surfaceY > currentY + 4`), teleports to surface heightmap and resumes pathfinding to bell.
-  - **T2 (> 600 ticks)**: Applies `MobEffects.GLOWING` for 10s and sounds `RAID_HORN` audio at raider position.
-  - **T3 (> 1200 ticks)**: If <= 3 raiders remain alive, discards lingering entity to cleanly dismiss the raid boss bar.
+### B. Anti-Spinning AI & Authoritative Threat Controller (`VillageGuardEntity.java`, `VillageDefenseController.java`)
+- `VillageGuardEntity` and `VillageArcherEntity`:
+  - `LookAtPlayerGoal`, `RandomLookAroundGoal`, and `WaterAvoidingRandomStrollGoal` execute strictly when `getTarget() == null && patrolState == PatrolState.PATROL`.
+  - 30-tick target hysteresis cooldown prevents rapid target flipping.
+  - Tactical kiting goal respects watchtower sentry state.
+- `VillageDefenseController`:
+  - Centralized `ThreatRecord` state tracking UUID, mob type, location, severity, victim, breaching status, horde membership, and assigned defenders.
+  - Rate-limited defense evaluations (20-tick intervals) prevent tick-by-tick oscillation.
+  - Intelligent defender allocation prioritizes civilian attackers, commanders, and breaching groups.
 
-### C. Guaranteed Dual Lookout Watchtowers (`SettlementManager.java`)
-- `ensureWatchtowers()`: Automatically verified every 200 ticks in `SettlementManager.tick()`.
-- Guarantees 2 watchtowers placed at 45° and 225° perimeter angles.
-- Foundation columns filled down to ground using `LivingWorldCommand.fillFoundationColumns()`.
-- Solid cobblestone ladder backing column with climbing ladder firmly attached.
-- Sentry lookout platform at y=10 with parapet fences and solid roof at y=12.
-- Stations elevated `VillageArcherEntity` with `isWatchtowerSentry=true` scanning 48–64m perimeters.
+### C. Civilian Distress Signalling & 5-State Shelter Machine (`CivilianDistressManager.java`, `CivilianShelterManager.java`)
+- `CivilianDistressManager`:
+  - Emits 1 distress call per incident with 300-tick (15s) deduplication.
+  - Physical reaction: panic audio (`VILLAGER_NO` / `VILLAGER_HURT`), particles (`ANGRY_VILLAGER` / `SPLASH`), facing attacker.
+  - Dispatches 1–2 closest defenders (guards, archers, golems) to intercept attacker.
+- `CivilianShelterManager`:
+  - 5-state lifecycle: `WORKING -> THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING`.
+  - Coordinates door closure with 40-tick anti-thrashing cooldown.
+  - Work suspension during threat states.
 
-### D. Natural Companion Dogs & Cavalry Mobilization (`VillageGuardManager.java`)
-- `tickSettlementDogs()`:
-  - Maintains 2–4 civilian pet dogs wandering village streets.
-  - Maintains 1 guard companion dog per 4 melee guards.
-  - Companions link via UUID (`pairWithGuard`), follow handler within 6m, and attack enemies targeting the handler or civilians.
-- `forceRecruitCavalry()`:
-  - Mobilizes when military capacity >= 3 (1 cavalry) and >= 6 (2 cavalry).
-  - Tames, saddles, and equips horse with iron or diamond horse armor.
-  - Full mount/dismount combat AI: remounts horse if separated, fights on foot if mount is destroyed.
+### D. Safe Spawn Validation Engine (`SafeSpawnValidation.java`)
+- Validates solid ground footing (rejects air, water, lava, voids).
+- Verifies full multi-block bounding box clearance.
+- Large mob headroom check: requires >= 1.0m extra vertical clearance above mob standing height for entities with height >= 2.2f or width >= 1.0f.
+- Spiral search fallback fails gracefully to null rather than forcing spawns inside solid blocks.
 
-### E. Blueprint Structural Integrity Overhaul (`BlueprintRegistry.java`, `Blueprint.java`)
-- Added `addDoor(x, y, z, facing, doorBlock)` ensuring correct double-block half states.
-- Added `addLadder(x, y, z, facing)` attaching ladders to solid backing blocks.
-- Overhauled 24 blueprints:
-  - `barracks`: Added solid stone brick roof (y=5..6), oak entrance door, internal lantern lighting.
-  - `small_oak_house`: Added front entrance door and solid pitched roof.
-  - `two_story_house`: Added entrance door, internal staircase with stairwell opening, and pitched roof with zero sky gaps.
-  - `farmhouse`, `workshop`, `warehouse`, `barn`, `inn_guesthouse`, `cleric_clinic`: Added solid roofs, doors, and authentic 2-block beds.
+### E. Cavalry Riding Offset & Mounted Combat AI (`LivingWorldEntities.java`, `VillageCavalryEntity.java`)
+- Configured `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)` across all humanoid rider entities.
+- Rider transfers navigation paths and combat targets directly to horse mounts.
+- Clean dismount transition to infantry combat if the horse is incapacitated.
+- Role naming: `Mounted Swordsman`, `Mounted Scout`, `Mounted Captain`.
+
+### F. Territorial Village Dogs & Breeder Puppies (`VillageDogEntity.java`)
+- Adult village dogs default to `villageBound=true` and return home if led away with gentle boundary reminders.
+- Guard companion dogs refuse player taming while their handler lives.
+- Breeding produces puppies with `villageBound=false` (free-roaming pets).
+
+### G. Natural Village Defense Reputation (`ReputationManager.java`)
+- Awards organic trust points for defending settlements (+1 hostile, +2 miner/armored, +3 raider, +5 saving villager, +10 commander).
+- 15-tick anti-farming cooldown.
+- Silent trust accumulation with quiet celebration announcements at milestones (25, 50, 100, 200) with titles:
+  - 25: `Recognized Visitor`
+  - 50: `Trusted Ally`
+  - 100: `Village Protector`
+  - 200: `Honored Defender`
+
+### H. 3D Structure Reservations (`Settlement.java`)
+- Persistent 3D bounding box checks prevent building overlap across existing buildings, active projects, and queued projects.
+- Plot selection surveys ground and rejects building roofs (planks, bricks, stone, slabs).
+
+### I. Dimensional Scars Biome Overhaul (`DimensionalScarGenerator.java`)
+- **Soul Sand Valley**: 4 fossil variations (rib cages, vertebrae spines, protruding tusks, fragments) with noise-blended soul sand, soil, and basalt.
+- **Crimson & Warped Forests**: Varied mushroom tree heights (5 to 11 blocks) with stepped drooping caps.
+- **Strict Water Safeguards**: Fluid detection traces down to ocean/river beds and converts submerged layers, leaving surface water flowing naturally with zero floating slabs.
+
+### J. Real Workforce Activities & Diagnostics (`VillageWorkforceManager.java`)
+- Daytime work hours enforcement (2000–9000 ticks).
+- Work suspension during attacks.
+- Authentic raw material consumption (wood for arrows, iron for weapons/armor/tools).
+- Genuine understaffed diagnostics (`Insufficient village population`, `Missing raw materials`, `Awaiting workstation interaction`).
 
 ---
 
-## 4. Diagnostic Debug Commands Suite
+## 4. Debug & Telemetry Commands Suite
 
 | Command | Permission | Purpose |
 |---|---|---|
-| `/livingworld debug raid objective` | All | Displays raid phase, target bell coordinates, physical presence, distance, and siege progress. |
-| `/livingworld debug raid raiders` | All | 160m diagnostic scan of all active raiders, distance to bell, stuck status, and underground status. |
-| `/livingworld debug raid stuck` | All | Detects stationary/trapped raiders within 160m and triggers surface road navigation recovery. |
-| `/livingworld debug raid bell` | All | Inspects targeted village bell block status, siege strike ticks, and emits visual particles. |
-| `/livingworld debug village towers` | All | Inspects watchtower count, coordinates, platform sentry archers, and generates missing towers. |
-| `/livingworld debug village buildings` | All | Lists all registered settlement blueprints, coordinates, completion status, and bed counts. |
-| `/livingworld debug village construction` | All | Displays progress of current active block-by-block construction project and queued projects. |
-| `/livingworld debug village dogs` | All | Lists all village dogs, roles (`Civilian Pet` / `Guard Companion`), and handler UUID links. |
-| `/livingworld debug cavalry status` | All | Displays deployed village cavalry units within 128m, role, horse health, and armor status. |
-| `/livingworld debug military patrols` | All | Comprehensive military readiness diagnostic: threat posture, active rally point, and forces deployed. |
+| `/livingworld defense threats` | All | Displays active tracked threats with severity score, location, and assigned defenders. |
+| `/livingworld defense distress` | All | Displays total deduplicated distress calls and active emergency incidents. |
+| `/livingworld defense shelters` | All | Displays civilian census across all 5 shelter states (`WORKING`, `THREAT_DETECTED`, `SEEKING_SHELTER`, `SHELTERED`, `RECOVERY`). |
+| `/livingworld reputation` | All | Displays player trust points, standing title, and progress toward next milestone. |
+| `/livingworld professions list` | All | Lists 13 professions with staffed status and genuine understaffed diagnostics. |
 
 ---
 
 ## 5. Verification & Testing
 
 ### Acceptance Test Suite (`scripts/test.ps1`)
-- **Total Tests:** 88
-- **Passed:** 88
+- **Total Tests:** 98
+- **Passed:** 98
 - **Failed:** 0
-- **Vanilla Invariant:** 0 files in `assets/minecraft/*`. Zero vanilla texture overrides.
+- **Vanilla Invariant:** Exactly 0 files in `assets/minecraft/*`. Zero vanilla texture overrides.
 
 ### Gameplay Playtest Suite (`scripts/test_gameplay.ps1`)
 - **Scenario 1:** Autonomous Civilization (Expansion, Husbandry, Stockpiles, Save/Reload) — **PASS**
@@ -138,12 +154,12 @@ Living World v0.2.7 resolves all 10 real-gameplay defects (`DEF-01` through `DEF
 ### In-World Survival Simulation (`scripts/test_quickplay_world.ps1`)
 - Launched official Minecraft 26.3 client into dedicated instance `instances/LivingWorld/` on NVIDIA GPU.
 - Ran for 60 seconds of full in-world Survival gameplay in `PlaytestSurvival`.
-- Monitored working set (738 MB), heap, chunk loading, tool-bearing zombie spawn, and simulation tick.
+- Monitored working set (750 MB), heap, chunk loading, tool-bearing zombie spawn, and simulation tick.
 - Exited cleanly with 0 crashes, 0 errors, and clean world save.
 
 ---
 
 ## 6. Git Status & Remote Restrictions
-- **Push Hold Status:** **ACTIVE (STRICT)** — Zero pushes to remote repository.
+- **Push Hold Status:** **ACTIVE (STRICT)** — Zero pushes to remote repository until user explicitly sends `"PUSH"`.
 - **Configured Git Author:** `PrathamKapoor <prathamkapoor027@gmail.com>`
 - **Local Commits:** Prepared for clean local commit.

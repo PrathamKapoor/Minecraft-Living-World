@@ -76,6 +76,24 @@ public class VillageWorkforceManager {
         public int getOutputAmount() {
             return outputAmount;
         }
+
+        public net.minecraft.sounds.SoundEvent getWorkSound() {
+            return switch (this) {
+                case FARMER -> SoundEvents.VILLAGER_WORK_FARMER;
+                case FISHERMAN -> SoundEvents.VILLAGER_WORK_FISHERMAN;
+                case FLETCHER -> SoundEvents.VILLAGER_WORK_FLETCHER;
+                case SHEPHERD -> SoundEvents.VILLAGER_WORK_SHEPHERD;
+                case BUTCHER -> SoundEvents.VILLAGER_WORK_BUTCHER;
+                case LEATHERWORKER -> SoundEvents.VILLAGER_WORK_LEATHERWORKER;
+                case LIBRARIAN -> SoundEvents.VILLAGER_WORK_LIBRARIAN;
+                case CARTOGRAPHER -> SoundEvents.VILLAGER_WORK_CARTOGRAPHER;
+                case CLERIC -> SoundEvents.VILLAGER_WORK_CLERIC;
+                case ARMORER -> SoundEvents.VILLAGER_WORK_ARMORER;
+                case WEAPONSMITH -> SoundEvents.VILLAGER_WORK_WEAPONSMITH;
+                case TOOLSMITH -> SoundEvents.VILLAGER_WORK_TOOLSMITH;
+                case MASON -> SoundEvents.VILLAGER_WORK_MASON;
+            };
+        }
     }
 
     public static class WorkforceCensus {
@@ -181,29 +199,74 @@ public class VillageWorkforceManager {
         }
 
         // 2. Tangible Production Cycle into Settlement Stockpiles and Armory
-        for (ManagedProfession prof : ManagedProfession.values()) {
-            int workers = census.getCount(prof);
-            if (workers > 0) {
-                // Stockpile resource contribution
-                if (prof.getOutputResource() != null && prof.getOutputAmount() > 0) {
-                    settlement.getStockpile().add(prof.getOutputResource(), workers * prof.getOutputAmount());
-                }
+        // Strictly suspended during active attacks/lockdowns or nighttime hours (Section 6 & 10)
+        long timeOfDay = level.getOverworldClockTime() % 24000;
+        boolean isWorkHours = (timeOfDay >= 2000 && timeOfDay <= 9000);
+        var defState = livingworld.faction.VillageDefenseController.get().getState(settlement.getId());
+        boolean underAttack = defState != null && (defState.getThreatLevel() == livingworld.faction.VillageDefenseController.ThreatLevel.UNDER_ATTACK || defState.isLockdownActive());
 
-                // Armory & Military Support Contributions
-                if (prof == ManagedProfession.ARMORER) {
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.IRON_CHESTPLATE, workers));
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.SHIELD, workers));
-                } else if (prof == ManagedProfession.WEAPONSMITH) {
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.IRON_SWORD, workers));
-                } else if (prof == ManagedProfession.FLETCHER) {
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.ARROW, workers * 16));
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.BOW, Math.max(1, workers / 2)));
-                } else if (prof == ManagedProfession.CLERIC) {
-                    // Cleric emergency medicine reserves
-                    VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.SPLASH_POTION, workers));
+        if (isWorkHours && !underAttack) {
+            Stockpile stock = settlement.getStockpile();
+            for (ManagedProfession prof : ManagedProfession.values()) {
+                int workers = census.getCount(prof);
+                if (workers > 0) {
+                    // Stockpile resource contribution with authentic material conversion
+                    if (prof.getOutputResource() != null && prof.getOutputAmount() > 0) {
+                        stock.add(prof.getOutputResource(), workers * prof.getOutputAmount());
+                    }
+
+                    // Armory & Military Support Contributions with raw material consumption
+                    if (prof == ManagedProfession.ARMORER) {
+                        if (stock.get(Stockpile.ResourceType.IRON) >= 1) {
+                            stock.consume(Stockpile.ResourceType.IRON, 1);
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.IRON_CHESTPLATE, workers));
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.SHIELD, workers));
+                        }
+                    } else if (prof == ManagedProfession.WEAPONSMITH) {
+                        if (stock.get(Stockpile.ResourceType.IRON) >= 1) {
+                            stock.consume(Stockpile.ResourceType.IRON, 1);
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.IRON_SWORD, workers));
+                        }
+                    } else if (prof == ManagedProfession.TOOLSMITH) {
+                        if (stock.get(Stockpile.ResourceType.IRON) >= 1) {
+                            stock.consume(Stockpile.ResourceType.IRON, 1);
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.IRON_PICKAXE, workers));
+                        }
+                    } else if (prof == ManagedProfession.FLETCHER) {
+                        if (stock.get(Stockpile.ResourceType.WOOD) >= 1) {
+                            stock.consume(Stockpile.ResourceType.WOOD, 1);
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.ARROW, workers * 16));
+                            VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.BOW, Math.max(1, workers / 2)));
+                        }
+                    } else if (prof == ManagedProfession.CLERIC) {
+                        // Cleric emergency medicine reserves
+                        VillageArmoryManager.get().depositEquipment(settlement, new ItemStack(Items.SPLASH_POTION, workers));
+                    }
                 }
             }
         }
+    }
+
+    public String getUnderstaffedDiagnostic(Settlement settlement, ManagedProfession prof, WorkforceCensus census) {
+        if (census == null) return "Census not yet compiled";
+        if (census.getCount(prof) >= 2) return "Fully staffed";
+        if (census.getTotalVillagers() < 26) {
+            return "Insufficient village population (" + census.getTotalVillagers() + "/26 residents)";
+        }
+        if (census.getUnemployedCount() == 0) {
+            return "No unassigned adults (all adults employed in other trades)";
+        }
+        Stockpile stock = settlement != null ? settlement.getStockpile() : null;
+        if (stock != null) {
+            if ((prof == ManagedProfession.ARMORER || prof == ManagedProfession.WEAPONSMITH || prof == ManagedProfession.TOOLSMITH)
+                && stock.get(Stockpile.ResourceType.IRON) < 1) {
+                return "Missing raw materials (iron ingot stockpile empty)";
+            }
+            if (prof == ManagedProfession.FLETCHER && stock.get(Stockpile.ResourceType.WOOD) < 1) {
+                return "Missing raw materials (wood stockpile empty)";
+            }
+        }
+        return "Awaiting workstation interaction (" + prof.getWorkstationItem().getName(ItemStack.EMPTY).getString() + ")";
     }
 
     private void assignProfession(ServerLevel level, Villager villager, ManagedProfession targetProf) {

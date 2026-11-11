@@ -265,7 +265,7 @@ public class BlueprintRegistry {
 
         bp.addDoor(4, 3, 1, Direction.SOUTH, Blocks.OAK_DOOR);
 
-        // Parapet Battlements (y=13 to y=15)
+        // Parapet Battlements (y=13 to y=15) with open walking surface
         for (int x = 0; x <= 8; x++) {
             for (int z = 0; z <= 8; z++) {
                 boolean isEdge = (x == 0 || x == 8 || z == 0 || z == 8);
@@ -279,9 +279,9 @@ public class BlueprintRegistry {
                 }
             }
         }
-        bp.addBlock(4, 14, 4, Blocks.CAMPFIRE); // Signal brazier
-        bp.addBlock(1, 14, 1, Blocks.LANTERN);
-        bp.addBlock(7, 14, 7, Blocks.LANTERN);
+        // Elevated lanterns on parapet corner posts (y=15), completely free walking/firing floor
+        bp.addBlock(0, 15, 0, Blocks.LANTERN);
+        bp.addBlock(8, 15, 8, Blocks.LANTERN);
 
         return bp;
     }
@@ -1101,17 +1101,19 @@ public class BlueprintRegistry {
             }
         }
 
-        // Sentry Roof (y=12) supported by corner posts
-        bp.addBlock(1, 11, 1, Blocks.OAK_FENCE);
-        bp.addBlock(1, 11, 5, Blocks.OAK_FENCE);
-        bp.addBlock(5, 11, 1, Blocks.OAK_FENCE);
-        bp.addBlock(5, 11, 5, Blocks.OAK_FENCE);
+        // Sentry Roof (y=13) with 2+ blocks of clear vertical space (y=11..12 open air)
+        for (int y = 11; y <= 12; y++) {
+            bp.addBlock(1, y, 1, Blocks.OAK_FENCE);
+            bp.addBlock(1, y, 5, Blocks.OAK_FENCE);
+            bp.addBlock(5, y, 1, Blocks.OAK_FENCE);
+            bp.addBlock(5, y, 5, Blocks.OAK_FENCE);
+        }
         for (int x = 1; x <= 5; x++) {
             for (int z = 1; z <= 5; z++) {
-                bp.addBlock(x, 12, z, Blocks.OAK_SLAB);
+                bp.addBlock(x, 13, z, Blocks.OAK_SLAB);
             }
         }
-        bp.addBlock(3, 11, 3, Blocks.LANTERN);
+        bp.addBlock(3, 13, 3, Blocks.LANTERN); // Hung high at roof ceiling, 0 floor/eye obstruction
 
         return bp;
     }
