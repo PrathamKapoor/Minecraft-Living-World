@@ -389,13 +389,17 @@ public class Settlement {
                 }
             }
 
-            // Reject plots with extreme slope (> 4 block variance across footprint)
+            // Reject plots with extreme slope (> 4 block variance across footprint) or isolated deep ravines (> 6 blocks below center)
             if (plotValid && (maxElevation - minElevation <= 4)) {
+                if (maxElevation < center.getY() - 6) {
+                    continue; // Plot is down in a surface ravine or chasm below the settlement plateau!
+                }
                 BlockPos plotOrigin = new BlockPos(testX, maxElevation, testZ);
                 // 3D Bounding Box Collision Check: reject if overlapping any existing building or watchtower
                 if (hasStructureOverlap(plotOrigin, width, 12, depth)) {
                     continue; // Plot overlaps an existing registered building reservation!
                 }
+                livingworld.worldgen.SettlementTerrainStabilizer.get().stabilizeExpansionPlot(level, plotOrigin, width, depth);
                 livingworld.command.LivingWorldCommand.fillFoundationColumns(level, plotOrigin, width, depth);
                 return plotOrigin;
             }
@@ -408,7 +412,7 @@ public class Settlement {
         if (activeProject != null) {
             activeProject.step(level, maxBlocksPerTick);
             if (activeProject.isComplete()) {
-                onProjectFinished(activeProject);
+                onProjectFinished(level, activeProject);
                 activeProject = null;
             }
         } else if (!constructionQueue.isEmpty()) {
@@ -416,7 +420,7 @@ public class Settlement {
         }
     }
 
-    private void onProjectFinished(ConstructionProject project) {
+    private void onProjectFinished(ServerLevel level, ConstructionProject project) {
         String bpId = project.getBlueprintId();
         Blueprint bp = BlueprintRegistry.get(bpId);
         int beds = bp != null ? bp.getBedCount() : 0;
@@ -426,6 +430,9 @@ public class Settlement {
             }
             if ("wheat_farm".equals(bpId) || "bakery".equals(bpId) || "barn".equals(bpId)) {
                 stockpile.add(Stockpile.ResourceType.FOOD, 25);
+            }
+            if ("livestock_pen".equals(bpId) || "barn".equals(bpId)) {
+                livingworld.worldgen.EnclosurePopulationManager.get().checkAndPopulateLivestockPen(level, project.getOrigin().offset(5, 1, 5));
             } else if ("watchtower".equals(bpId) || "archer_watchtower".equals(bpId)) {
                 guardCount += 2;
                 addWatchtower(project.getOrigin());

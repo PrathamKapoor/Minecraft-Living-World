@@ -72,6 +72,7 @@ public class EmpireManager {
         settlement.getStockpile().add(livingworld.economy.Stockpile.ResourceType.IRON, 60);
 
         BlockPos center = settlement.getCenter();
+        livingworld.worldgen.SettlementTerrainStabilizer.get().stabilizeSettlement(level, center, 110, null);
 
         // 1. Fortified Multi-Building Infrastructure: Queue Palace, Barracks, Gatehouse, Market, Watchtower
         queueImperialBuilding(level, settlement, "palace");

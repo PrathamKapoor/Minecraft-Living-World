@@ -131,6 +131,7 @@ public class SettlementManager {
             settlement.setHousingCapacity(settlement.getPopulation() + 1); // Triggers autonomous construction
             register(settlement);
             EmpireManager.get().checkAndPromoteToEmpire(level, settlement);
+            livingworld.worldgen.SettlementTerrainStabilizer.get().stabilizeSettlement(level, pos, settlement.getRadius(), null);
             ensureWatchtowers(level, settlement);
             livingworld.LivingWorldMod.LOGGER.info("[Living World] Auto-discovered natural village: " + name + " at " + pos + " with population " + settlement.getPopulation());
 
@@ -243,6 +244,7 @@ public class SettlementManager {
                     continue;
                 }
                 if (level.isLoaded(origin) && !ProtectionManager.get().isProtectedBlock(level, origin)) {
+                    livingworld.worldgen.SettlementTerrainStabilizer.get().stabilizeExpansionPlot(level, origin, bp.getWidth(), bp.getDepth());
                     livingworld.command.LivingWorldCommand.fillFoundationColumns(level, origin, bp.getWidth(), bp.getDepth());
                     for (var entry : bp.getBlocks().entrySet()) {
                         BlockPos target = origin.offset(entry.getKey().getX(), entry.getKey().getY(), entry.getKey().getZ());
