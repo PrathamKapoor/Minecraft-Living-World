@@ -535,7 +535,9 @@ public class DimensionalScarGenerator {
 
         // Gold Block Offering & Chest Platform
         setBlockSafe(level, ground.offset(0, 0, 2), Blocks.GOLD_BLOCK.defaultBlockState());
-        setBlockSafe(level, ground.offset(1, 0, 2), Blocks.CHEST.defaultBlockState());
+        BlockPos altarChestPos = ground.offset(1, 0, 2);
+        setBlockSafe(level, altarChestPos, Blocks.CHEST.defaultBlockState());
+        ContainerLootManager.get().seedBlueprintContainer(level, altarChestPos, "scar_relic_altar");
 
         // Surrounding magma and crying obsidian scatter
         setBlockSafe(level, ground.offset(-3, -1, 1), Blocks.MAGMA_BLOCK.defaultBlockState());
@@ -584,7 +586,9 @@ public class DimensionalScarGenerator {
 
         // Interior relics: Crafting table, abandoned chest, cobwebs, lantern
         setBlockSafe(level, ground.offset(1, 0, 1), Blocks.CRAFTING_TABLE.defaultBlockState());
-        setBlockSafe(level, ground.offset(-1, 0, 1), Blocks.CHEST.defaultBlockState());
+        BlockPos cottageChestPos = ground.offset(-1, 0, 1);
+        setBlockSafe(level, cottageChestPos, Blocks.CHEST.defaultBlockState());
+        ContainerLootManager.get().seedBlueprintContainer(level, cottageChestPos, "scar_enclave_cottage");
         setBlockSafe(level, ground.offset(1, 2, -1), Blocks.COBWEB.defaultBlockState());
         setBlockSafe(level, ground.offset(0, 3, 0), Blocks.LANTERN.defaultBlockState());
     }

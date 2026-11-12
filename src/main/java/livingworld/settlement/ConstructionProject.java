@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
@@ -114,6 +115,9 @@ public class ConstructionProject {
 
             // Place block
             level.setBlock(targetPos, state, 3);
+            if (state.is(Blocks.CHEST) || state.is(Blocks.BARREL) || state.is(Blocks.TRAPPED_CHEST)) {
+                livingworld.worldgen.ContainerLootManager.get().seedBlueprintContainer(level, targetPos, blueprintId);
+            }
 
             // Block placement sound and particles
             try {
