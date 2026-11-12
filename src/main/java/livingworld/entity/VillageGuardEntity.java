@@ -81,6 +81,10 @@ public class VillageGuardEntity extends PathfinderMob {
         this.setCustomNameVisible(false);
         this.setPersistenceRequired(); // Critical persistence: never despawn naturally (BUG-06)
 
+        if (this.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation gNav) {
+            gNav.setCanOpenDoors(true);
+        }
+
         if (!level.isClientSide()) {
             AllegianceRegistry.get().register(this.getUUID(), homeSettlementId, "VILLAGE_ALLIANCE", AllegianceRegistry.MilitaryRole.MELEE_GUARD);
         }
@@ -130,6 +134,7 @@ public class VillageGuardEntity extends PathfinderMob {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
+        this.goalSelector.addGoal(1, new livingworld.ai.FenceGateInteractGoal(this));
         // Tactical Settlement Defense Rally: moves towards alarm coordinate if settlement under attack
         this.goalSelector.addGoal(1, new DefendSettlementGoal(this));
         this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.25, false));
