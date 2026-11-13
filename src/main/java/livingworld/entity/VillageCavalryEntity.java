@@ -101,9 +101,19 @@ public class VillageCavalryEntity extends VillageGuardEntity {
     }
 
     /**
-     * Spawns an armored, saddled horse and mounts it.
+     * Spawns an armored, saddled horse and mounts it, strictly preventing horse duplication.
      */
     public Horse spawnAndMountHorse(ServerLevel level) {
+        if (this.horseUuid != null) {
+            Entity existing = level.getEntity(this.horseUuid);
+            if (existing instanceof Horse existingHorse && existingHorse.isAlive()) {
+                if (!this.isPassenger()) {
+                    this.startRiding(existingHorse);
+                }
+                return existingHorse;
+            }
+        }
+
         Horse horse = EntityTypes.HORSE.create(level, EntitySpawnReason.EVENT);
         if (horse == null) return null;
 
@@ -113,6 +123,7 @@ public class VillageCavalryEntity extends VillageGuardEntity {
         horse.setItemSlot(EquipmentSlot.BODY, new ItemStack(
             cavalryRole == CavalryRole.MOUNTED_CAPTAIN ? Items.DIAMOND_HORSE_ARMOR : Items.IRON_HORSE_ARMOR));
         horse.setPersistenceRequired();
+        horse.setCustomName(Component.literal("§7Patrol Steed"));
 
         level.addFreshEntity(horse);
         this.startRiding(horse);
@@ -129,15 +140,22 @@ public class VillageCavalryEntity extends VillageGuardEntity {
         if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel) {
             // Mounted Navigation Steering: Rider directs horse movement towards targets
             if (this.isPassenger() && this.getVehicle() instanceof Horse horse) {
-                LivingEntity combatTarget = this.getTarget();
-                if (combatTarget != null && combatTarget.isAlive()) {
-                    horse.getNavigation().moveTo(combatTarget, 1.35);
-                    horse.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
-                    this.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
-                } else if (this.getNavigation().isInProgress()) {
-                    var path = this.getNavigation().getPath();
-                    if (path != null && !horse.getNavigation().isInProgress()) {
-                        horse.getNavigation().moveTo(path, 1.15);
+                // Outdoor patrol enforcement: dismount immediately if forced into indoor building with low ceiling
+                BlockPos horseHeadPos = horse.blockPosition().above(2);
+                if (serverLevel.getBlockState(horseHeadPos).isSolid() || !serverLevel.canSeeSky(horse.blockPosition())) {
+                    // Safe outdoor dismount: rider steps down to prevent horse suffocation inside buildings
+                    this.stopRiding();
+                } else {
+                    LivingEntity combatTarget = this.getTarget();
+                    if (combatTarget != null && combatTarget.isAlive()) {
+                        horse.getNavigation().moveTo(combatTarget, 1.35);
+                        horse.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
+                        this.getLookControl().setLookAt(combatTarget, 30.0f, 30.0f);
+                    } else if (this.getNavigation().isInProgress()) {
+                        var path = this.getNavigation().getPath();
+                        if (path != null && !horse.getNavigation().isInProgress()) {
+                            horse.getNavigation().moveTo(path, 1.15);
+                        }
                     }
                 }
             }

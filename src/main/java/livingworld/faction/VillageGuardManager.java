@@ -2,6 +2,7 @@ package livingworld.faction;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import livingworld.core.ProtectionManager;
 import livingworld.economy.VillageArmoryManager;
 import livingworld.entity.LivingWorldEntities;
 import livingworld.entity.VillageArcherEntity;
@@ -19,6 +20,8 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -341,13 +344,73 @@ public class VillageGuardManager {
         return false;
     }
 
+    public static BlockPos findSafeOutdoorCavalrySpawn(ServerLevel level, Settlement settlement, BlockPos nearPos) {
+        if (level == null) return null;
+        BlockPos center = settlement != null ? settlement.getCenter() : (nearPos != null ? nearPos : BlockPos.ZERO);
+        Random rand = new Random(level.getGameTime() ^ center.asLong());
+
+        for (int attempts = 0; attempts < 32; attempts++) {
+            int angle = rand.nextInt(360);
+            int dist = 10 + rand.nextInt(24);
+            int ox = (int) (Math.cos(Math.toRadians(angle)) * dist);
+            int oz = (int) (Math.sin(Math.toRadians(angle)) * dist);
+            int testX = center.getX() + ox;
+            int testZ = center.getZ() + oz;
+
+            int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, testX, testZ);
+            if (surfaceY < 62) continue;
+
+            BlockPos candidate = new BlockPos(testX, surfaceY, testZ);
+            if (!level.isLoaded(candidate)) continue;
+
+            // Outdoor check: must see sky
+            if (!level.canSeeSky(candidate)) continue;
+
+            // Ground check: solid footing, not leaf or fluid
+            BlockPos ground = candidate.below();
+            BlockState gs = level.getBlockState(ground);
+            if (!gs.isSolid() || gs.is(Blocks.WATER) || gs.is(Blocks.LAVA) || gs.is(Blocks.OAK_LEAVES)) {
+                continue;
+            }
+
+            // Headroom check: at least 3 blocks of clear air for horse + rider
+            boolean headroomOk = true;
+            for (int dy = 0; dy < 3; dy++) {
+                BlockPos check = candidate.above(dy);
+                if (!level.getBlockState(check).isAir()) {
+                    headroomOk = false;
+                    break;
+                }
+            }
+            if (!headroomOk) continue;
+
+            // Check structure reservation: not inside any registered building
+            if (settlement != null && settlement.hasStructureOverlap(candidate, 2, 3, 2)) {
+                continue;
+            }
+
+            // Check protection
+            if (ProtectionManager.get().isProtectedBlock(level, candidate)) {
+                continue;
+            }
+
+            return candidate;
+        }
+        return null; // Defer spawning if no safe outdoor spot found
+    }
+
     public boolean forceRecruitCavalry(ServerLevel level, Settlement settlement, BlockPos pos, livingworld.entity.VillageCavalryEntity.CavalryRole role) {
-        if (level == null || pos == null) return false;
+        if (level == null) return false;
+        BlockPos safePos = findSafeOutdoorCavalrySpawn(level, settlement, pos);
+        if (safePos == null) {
+            livingworld.LivingWorldMod.LOGGER.info("[Living World] Cavalry recruitment deferred: No safe outdoor mounting location found.");
+            return false;
+        }
         String settlementId = settlement != null ? settlement.getId().toString() : UUID.randomUUID().toString();
 
         livingworld.entity.VillageCavalryEntity cavalry = LivingWorldEntities.VILLAGE_CAVALRY.create(level, EntitySpawnReason.COMMAND);
         if (cavalry != null) {
-            cavalry.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
+            cavalry.setPos(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5);
             cavalry.setHomeSettlementId(settlementId);
             cavalry.setCavalryRole(role != null ? role : livingworld.entity.VillageCavalryEntity.CavalryRole.MOUNTED_SWORDSMAN);
             cavalry.setCustomNameVisible(true);
@@ -356,10 +419,10 @@ public class VillageGuardManager {
             level.addFreshEntity(cavalry);
             cavalry.spawnAndMountHorse(level);
 
-            level.playSound(null, pos, SoundEvents.HORSE_ARMOR.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
-            level.sendParticles(ParticleTypes.ENCHANTED_HIT, pos.getX() + 0.5, pos.getY() + 1.2, pos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
+            level.playSound(null, safePos, SoundEvents.HORSE_ARMOR.value(), SoundSource.NEUTRAL, 1.0f, 1.0f);
+            level.sendParticles(ParticleTypes.ENCHANTED_HIT, safePos.getX() + 0.5, safePos.getY() + 1.2, safePos.getZ() + 0.5, 16, 0.5, 0.5, 0.5, 0.1);
             if (settlement != null) settlement.setGuardCount(settlement.getGuardCount() + 1);
-            livingworld.LivingWorldMod.LOGGER.info("[Living World] Cavalry Enlistment: Mounted unit mobilized in " + (settlement != null ? settlement.getName() : "Wilderness"));
+            livingworld.LivingWorldMod.LOGGER.info("[Living World] Cavalry Enlistment: Mounted unit mobilized in " + (settlement != null ? settlement.getName() : "Wilderness") + " at " + safePos);
             return true;
         }
         return false;
