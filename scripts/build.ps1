@@ -97,7 +97,7 @@ if (Test-Path "$projectRoot\src\main\resources") {
 }
 
 # Package JAR
-$modJar = "$libsDir\livingworld-0.2.8.jar"
+$modJar = "$libsDir\livingworld-0.2.9.jar"
 if (Test-Path $modJar) { Remove-Item -Force $modJar }
 
 Set-Location $classesDir
@@ -114,35 +114,18 @@ Write-Host "Successfully packaged $modJar ($jarSize bytes)" -ForegroundColor Gre
 $instanceMods = "$projectRoot\instances\LivingWorld\minecraft\mods"
 if (Test-Path $instanceMods) {
     # Remove older jars from instance mods to prevent duplicate ID collision
+    for ($i = 0; $i -le 8; $i++) {
+        $oldJar = "$instanceMods\livingworld-0.2.$i.jar"
+        if (Test-Path $oldJar) { Remove-Item -Force $oldJar }
+    }
     if (Test-Path "$instanceMods\livingworld-0.1.0.jar") {
         Remove-Item -Force "$instanceMods\livingworld-0.1.0.jar"
     }
     if (Test-Path "$instanceMods\livingworld-0.2.0.jar") {
         Remove-Item -Force "$instanceMods\livingworld-0.2.0.jar"
     }
-    if (Test-Path "$instanceMods\livingworld-0.2.1.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.1.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.2.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.2.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.3.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.3.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.4.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.4.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.5.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.5.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.6.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.6.jar"
-    }
-    if (Test-Path "$instanceMods\livingworld-0.2.7.jar") {
-        Remove-Item -Force "$instanceMods\livingworld-0.2.7.jar"
-    }
-    Copy-Item -Path $modJar -Destination "$instanceMods\livingworld-0.2.8.jar" -Force
-    Write-Host "Deployed to Prism Launcher instance: $instanceMods\livingworld-0.2.8.jar" -ForegroundColor Green
+    Copy-Item -Path $modJar -Destination "$instanceMods\livingworld-0.2.9.jar" -Force
+    Write-Host "Deployed to Prism Launcher instance: $instanceMods\livingworld-0.2.9.jar" -ForegroundColor Green
 }
 
 Write-Host "========================================" -ForegroundColor Cyan

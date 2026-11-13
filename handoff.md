@@ -1,10 +1,10 @@
-# HANDOFF.md — Living World v0.2.8 Engineering Handoff Document
+# HANDOFF.md — Living World v0.2.9 Engineering Handoff Document
 
 **Project:** Minecraft: Living World  
-**Release:** Version 0.2.8 — Operation: Make the World Actually Alive (Stabilization & Quality Overhaul)  
+**Release:** Version 0.2.9 — Terrain Stabilization, Container Loot, Badlands Trap & Mob Navigation Update  
 **Target Platform:** Minecraft Java Edition 26.3 / Fabric Loader 0.20.1 / Java 25  
 **Instance Path:** `instances/LivingWorld/` (Dedicated, isolated instance)  
-**Latest Verified Artifact:** `instances/LivingWorld/minecraft/mods/livingworld-0.2.8.jar` (415,983 bytes, 81 compiled classes)  
+**Latest Verified Artifact:** `instances/LivingWorld/minecraft/mods/livingworld-0.2.9.jar` (464,707 bytes, 86 compiled classes)  
 **Rollback Artifact:** `backup_v0.2.8/livingworld-0.2.8.jar` (415,983 bytes, SHA256: `CDBBD0A2DE1F2C6C0E81FE7C6E16D9CA6C3179D76A5C2C696716A4BB7C9A68DB`)  
 **Git Repository:** `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)  
 **Push Hold Status:** **ACTIVE (STRICT)** — All commits created locally. Zero pushes to remote repository until user explicitly commands `"PUSH"`.
@@ -12,32 +12,26 @@
 ---
 
 ## 1. Executive Summary
-Living World v0.2.8 executes a comprehensive stabilization and quality overhaul across all gameplay systems, addressing 12 critical real-gameplay defects identified during hands-on creator playtesting:
-1. **Watchtower Defensive Architecture**: Complete rebuild providing 2 full blocks of unobstructed standing headroom (y=11..12), roof slab at y=13, lantern suspended high at ceiling with zero floor obstruction, parapets with 8-direction firing ports, and raycast line-of-sight validation.
-2. **Anti-Spinning AI & Target Hysteresis**: Eliminated erratic guard/archer spinning by enforcing 30-tick target preservation hysteresis, 20-tick defense rally throttling, and strictly gating idle stroll/look goals to non-combat states.
-3. **Authoritative Threat Allocation**: Shared settlement `ThreatRecord` state tracking severity, breaching status, horde membership, and assigned defenders, preventing entire garrisons from swarming a single zombie while hordes attack civilians.
-4. **Civilian Distress Signalling**: Deduplicated emergency distress events (1 per incident, 300-tick cooldown) with authentic audio/particles, dispatching 1–2 nearest defenders to intercept attackers.
-5. **5-State Civilian Shelter Lifecycle**: Autonomous lifecycle (`WORKING -> THREAT_DETECTED -> SEEKING_SHELTER -> SHELTERED -> RECOVERY -> WORKING`) routing to interior safe buildings and coordinating door closures with a 40-tick anti-thrashing cooldown.
-6. **Safe Spawn Clearance Engine**: Multi-block bounding box clearance and solid footing checks with extra vertical headroom (>= 1.0m) for large mobs (Iron Golems, Mutant Commanders), completely preventing wall/ceiling suffocation.
-7. **Cavalry Alignment & Mounted Steering**: Configured `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)` across all humanoid riders, eliminating the 0.7m vertical floating gap above saddles. Rider transfers navigation and combat targets directly to horse mounts.
-8. **Territorial Village Dogs & Free-Roaming Puppies**: Adult village dogs remain tethered to settlement territory with gentle boundary reminders; guard dogs remain loyal to handlers; bred puppies inherit free-roaming status.
-9. **Natural Village Defense Reputation**: Organic trust awarded for defending settlements (+1 to +10) with quiet milestone announcements and titles at 25, 50, 100, and 200 points.
-10. **3D Structure Reservations**: Persistent 3D bounding box checks preventing building overlap and rejecting roof elevations during plot surveying.
-11. **Dimensional Scars Redesign**: Noise-blended Soul Sand Valley with 4 fossil types (rib cages, vertebrae, tusks, fragments), Crimson/Warped trees (5–11m tall with stepped drooping caps), and strict water safeguards preventing floating stone slabs over rivers or oceans.
-12. **Meaningful Profession Activities & Diagnostics**: Daytime work hours (2000–9000 ticks) consuming raw materials (wood for arrows, iron for gear) with genuine diagnostics for understaffed trades.
+Living World v0.2.9 addresses 6 critical defects identified in playtesting:
+1. **Settlement & Outpost 50-Block Terrain Stabilization**: Eliminates buildings generating at the bottom of steep ravines or chasms during raids (-243, 100, -905). Analyzes a 50-block radius and full structure footprint, bridging surface ravines and shafts with biome topsoil while preserving a 4-6 block stone vault for underground cave exploration. Projects foundations down to solid ground and levels doorways.
+2. **Container Loot Assignment**: Assigns authentic loot tables to village barrels (Oakvale house), weaponsmiths, fishers, butchers, temples, cartographers, ruined portals, and custom dimensional scars. Containers are seeded immediately upon placement.
+3. **Badlands Temple Trap Invariant**: Overhauls Explorify's badlands pyramid NBT palette and integrates `ContainerLootManager.validateAndFixPyramidTrap`. Enforces exactly 1 trapped chest and 3 regular chests with desert pyramid loot. Only the single trapped chest detonates the TNT trap below.
+4. **Outdoor Safe Cavalry Mobilization**: Implemented `findSafeOutdoorCavalrySpawn()` requiring >=3.0m vertical clearance, open sky view, and solid ground footing. Defers recruitment if no safe outdoor spot exists, preventing indoor house spawns (-235, 102, -896). Mount UUID is preserved on reload without duplicate horses.
+5. **Livestock Enclosures & Outpost Cage Population**: Implemented `EnclosurePopulationManager` populating starter herds (2-3 cows, sheep, or pigs) inside empty village pens (-242, 106, -889 and -291, 98, -893), and captives (villagers, iron golems, allays) in outpost cages (-8, 64, -231). Deduplicated with grid keys to avoid reload duplication.
+6. **Fence Gate Navigation AI**: Created `FenceGateInteractGoal` allowing village guards, archers, and cavalry to autonomously open fence gates bi-directionally, coordinate multi-defender crossings, and close gates after passage (-248, 105, -876). Explicitly protects livestock pens (`isLivestockGate`) and preserves player interaction.
 
 ---
 
-## 2. Defect Resolution Matrix
+## 2. Playtest Defect Resolution Matrix
 
 | Defect ID | Title | Root Cause & Resolution | Verification |
 |---|---|---|---|
-| **CRIT-01** | Non-functional Watchtowers | Platform at y=10 had low ceiling, obstructing lanterns and doors on floor. Overhauled blueprint with 2 full blocks of standing headroom (y=11..12), roof at y=13, lantern suspended at ceiling, and raycast line-of-sight checks. | `Test 92`, Visual Audit |
-| **CRIT-02** | Guards & Archers Randomly Spinning | LookAtPlayer, RandomLookAround, and stroll goals fought combat targets; target cleared tick-by-tick. Gated idle goals to non-combat states and implemented 30-tick target hysteresis. | `Test 91`, AI Regression |
-| **CRIT-03** | Tactically Incompetent Soldiers | Every defender independently targeted nearest mob without situational awareness. Implemented authoritative `ThreatRecord` settlement state and intelligent defender distribution. | `Test 86`, `Test 91` |
-| **CRIT-04** | Civilians Lack Distress Signalling | Villagers took damage silently without alerting nearby soldiers. Implemented `CivilianDistressManager` with 300t deduplication, physical panic reaction, and responder dispatch. | `Test 89`, Distress Audit |
-| **CRIT-05** | Civilians Fail to Shelter / Door Thrashing | Villagers wandered outside during raids; open-close door thrashing occurred. Implemented 5-state shelter machine and 40-tick door closure cooldown. | `Test 90`, Shelter Audit |
-| **CRIT-06** | Large Entities Spawning in Walls | Golems and Mutant Commanders spawned using single-block checks. Created `SafeSpawnValidation` requiring solid footing, full bounding box, and >=1.0m extra headroom. | `Test 94`, Collision Audit |
+| **TERR-01** | Village House at Bottom of Ravine | Unconstrained jigsaw placement allowed houses in ravines. Added `SettlementTerrainStabilizer` & `StructureStartMixin` enforcing 50-block radius bridging with biome topsoil and 4-6 block cave vault preservation. | `Test 99`, Seed Playtest |
+| **LOOT-01** | Empty Chests & Barrels | Missing loot table assignments on custom blueprints, barrels, and scars. Created `ContainerLootManager` assigning authentic vanilla tables on placement. | `Test 100`, In-game Inspection |
+| **TRAP-01** | Badlands Pyramid 4 Trapped Chests | Explorify NBT had 4 trapped chests over TNT. Converted palettes 27-29 to normal chests; kept palette 30 as trapped chest. Runtime validator guarantees 1 trapped and 3 regular chests. | `Test 101`, Explosion & Loot Test |
+| **MOB-01** | Mounted Scout Inside House | Spawning logic selected villager coordinates inside houses. Added `findSafeOutdoorCavalrySpawn` requiring 3.0m headroom and sky view; dismounts under low ceilings. | `Test 103`, Cavalry Audit |
+| **POP-01** | Empty Livestock Pens & Tower Cages | CTOV and vanilla pen/cage NBTs lack entity data. Created `EnclosurePopulationManager` spawning starter stock and captives with grid-key deduplication. | `Test 104`, World Inspection |
+| **GATE-01** | Archers Stuck at Fence Gates | Vanilla `DoorInteractGoal` only handles `DoorBlock`. Created `FenceGateInteractGoal` with bi-directional navigation, multi-NPC coordination, and livestock protection. | `Test 102`, Gate Traversal Test |
 | **CRIT-07** | Floating Cavalry (0.7m Above Saddle) | Missing vehicle riding offset on EntityType. Registered `.ridingOffset(-0.7f)` and `.eyeHeight(1.74f)`; forward navigation targets to horse mounts. | `Test 93`, Render Audit |
 | **CRIT-08** | Village Dog Ownership & Taming Issues | Village dogs could be tamed away by accident; guard dogs deserted handlers. Set `villageBound=true` for village dogs, protected guard dogs, and made bred puppies free-roaming. | `Test 95`, Pets Audit |
 | **CRIT-09** | Missing Reputation for Village Defense | Players received zero recognition for saving settlements. Implemented organic trust rewards (+1 to +10) with silent accumulation and milestone honors at 25, 50, 100, 200. | `Test 96`, Reputation Audit |

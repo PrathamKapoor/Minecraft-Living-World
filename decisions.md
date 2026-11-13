@@ -21,6 +21,9 @@
 - DEC-0018: Civilization Intelligence, Dimensional Scars & Release Engineering Architecture — ACCEPTED
 - DEC-0020: The Siege & Settlement Reliability Update Architecture — ACCEPTED
 - DEC-0025: Defense AI, Distress Signaling, Watchtower Geometry, and World Stabilization — ACCEPTED
+- DEC-0026: Settlement Terrain Stabilization & Ravine Bridging Engine — ACCEPTED
+- DEC-0027: Badlands Pyramid Trap Invariant & Container Loot Distribution — ACCEPTED
+- DEC-0028: Mob Navigation, Fence Gate Traversal, and Enclosure Population Architecture — ACCEPTED
 
 ---
 
@@ -529,5 +532,63 @@ Verification:
   - 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
   - Push Hold strictly maintained.
 Revisit trigger: Cross-settlement trade caravans or naval warfare additions.
+
+---
+
+## DEC-0026 — Settlement Terrain Stabilization & Ravine Bridging Engine (v0.2.9)
+Date: 2026-11-12T14:00:00Z
+Status: accepted
+Context: Playtesting revealed a village house generating at the bottom of a surface ravine during an active raid (-243, 100, -905). Guards, archers, and raiders became trapped in sheer vertical ravines, and iron golems were unable to reach settlement boundaries.
+Options:
+  1. Rely exclusively on vanilla structure bounding boxes and placement offsets.
+  2. Implement an active terrain stabilization engine (`SettlementTerrainStabilizer` & `StructureStartMixin`) enforcing a 50-block horizontal radius and full structure footprint stabilization prior to building and road generation.
+Decision: Option 2.
+Rationale:
+  - Scans a 50-block radius around newly generated villages, empires, and pillager outposts.
+  - Detects and bridges surface ravines, drop-offs, and open shafts using biome-native topsoil and foundation blocks (grass, dirt, sand, terracotta, podzol).
+  - Preserves underground caves with a 4-6 block solid stone vault ceiling, maintaining spelunking exploration beneath settlements.
+  - Grades steep expansion slopes, anchors foundations (`secureFoundationBox`), and smooths doorway thresholds (`ensureAccessibleEntrance`).
+Verification: Automated Test 99 and in-world generation verification on ravine seeds.
+Revisit trigger: Addition of subterranean dwarven fortress civilizations.
+
+---
+
+## DEC-0027 — Badlands Pyramid Trap Invariant & Container Loot Distribution (v0.2.9)
+Date: 2026-11-12T18:00:00Z
+Status: accepted
+Context: Playtest audits revealed:
+  1. Badlands temple (Explorify mod structure) generated four trapped chests at [12, 3, 12], meaning opening any chest immediately detonated the TNT below.
+  2. Certain village barrels (e.g., Oakvale house) and dimensional scar chests generated without loot tables.
+Options:
+  1. Leave mod structures unpatched or rely on manual datapack overrides.
+  2. Override the Explorify NBT structure palette to replace palettes 27-29 with regular chests and keep palette 30 as trapped chest; supplement with runtime validator `validateAndFixPyramidTrap` and comprehensive `ContainerLootManager` seeding.
+Decision: Option 2.
+Rationale:
+  - Enforces the strict rule: exactly one trapped chest and three regular chests. Opening the trapped chest activates the TNT trap; opening the other three provides loot safely.
+  - `ContainerLootManager` associates structure contexts with authentic vanilla loot tables (fisher, weaponsmith, butcher, temple, ruined portal), seeding containers on placement.
+Verification: Automated Tests 100 and 101, NBT palette inspection, and interactive container opening.
+Revisit trigger: Additional third-party structure pack integrations.
+
+---
+
+## DEC-0028 — Mob Navigation, Fence Gate Traversal, and Enclosure Population Architecture (v0.2.9)
+Date: 2026-11-13T10:00:00Z
+Status: accepted
+Context: Playtest observations showed:
+  1. Mounted cavalry spawned inside residential houses (-235, 102, -896) under low ceilings.
+  2. Livestock pens generated empty (-242, 106, -889 and -291, 98, -893).
+  3. Pillager tower prisoner cages generated empty (-8, 64, -231).
+  4. Archers and guards got stuck at fence gates (-248, 105, -876).
+Options:
+  1. Disable fence gates and prevent cavalry spawning.
+  2. Implement dedicated AI goals and population managers:
+     - `FenceGateInteractGoal`: Allows guards and archers to open gates bi-directionally, coordinate multi-NPC crossings, close gates after passage, and explicitly protect livestock enclosures (`isLivestockGate`).
+     - `VillageGuardManager.findSafeOutdoorCavalrySpawn`: Requires >=3.0m vertical clearance, clear sky view, and solid ground, deferring recruitment if no spot exists.
+     - `EnclosurePopulationManager`: Populates empty village pens with 2-3 starter livestock (cows, sheep, pigs) and outpost cages with captives (villagers, iron golems, allays), deduplicated via grid keys to prevent duplicate spawning on reload.
+Decision: Option 2.
+Rationale: Restores immersive sandbox life, functional defense patrols, and proper animal husbandry and rescue gameplay.
+Verification: Automated Tests 101, 102, 103, 104, and live in-world quickplay simulation.
+Revisit trigger: Additional cage captive types or tamed pack animals.
+
 
 

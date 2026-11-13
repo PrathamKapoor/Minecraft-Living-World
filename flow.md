@@ -1,18 +1,75 @@
 # flow.md — Living World Development Work Journal
 
 ## CURRENT CHECKPOINT
-- UTC time: 2026-11-11T19:25:00Z
-- Active milestone/task: Version 0.2.8 — Operation: Make the World Actually Alive (AI, Architecture, Combat, Civilization & World Generation Stabilization) — COMPLETED
-- Last known passing build: STEP 0025 (livingworld-0.2.8.jar with 81 classes, 415,983 bytes; 98/98 acceptance tests passed; 8/8 gameplay playtest scenarios passed; 60s in-world Survival quickplay passed; 0 files in assets/minecraft/*)
-- Current build status: All 98 acceptance tests PASSED; all 8 gameplay playtest scenarios PASSED; 60s in-world Survival quickplay PASSED on dedicated instance LivingWorld.
+- UTC time: 2026-11-13T11:15:00Z
+- Active milestone/task: Version 0.2.9 — Settlement Terrain Stabilization, Container Loot, Badlands Trap & Mob Navigation Update — COMPLETED
+- Last known passing build: STEP 0026 (livingworld-0.2.9.jar with 86 classes, 464,707 bytes; 104/104 acceptance tests passed; 8/8 gameplay playtest scenarios passed; 60s in-world Survival quickplay passed; 0 files in assets/minecraft/*)
+- Current build status: All 104 acceptance tests PASSED; all 8 gameplay playtest scenarios PASSED; 60s in-world Survival quickplay PASSED on dedicated instance LivingWorld.
 - Git Repository: `https://github.com/PrathamKapoor/Minecraft-Living-World` (Branch: `main`)
 - Rollback Point Established: `backup_v0.2.8/livingworld-0.2.8.jar` (Length: 415,983 bytes, SHA256: `CDBBD0A2DE1F2C6C0E81FE7C6E16D9CA6C3179D76A5C2C696716A4BB7C9A68DB`)
 - Critical Constraint: DO NOT PUSH to GitHub until user explicitly sends "PUSH". Local commits strictly under PrathamKapoor <prathamkapoor027@gmail.com>.
-- NEXT ACTION: Stage all changes and create local git commit `feat(v0.2.8): Operation: Make the World Actually Alive stabilization overhaul`.
+- NEXT ACTION: Stage distinct units of work and create granular local git commits spanning 2026-11-12 and 2026-11-13.
 
 ---
 
 ## CHRONOLOGICAL JOURNAL
+
+### 2026-11-13T11:15:00Z — STEP 0026 — DONE
+Goal: Execute Version 0.2.9 Terrain Stabilization, Container Loot, Badlands Trap & Mob Navigation Update:
+  1. Phase 1 — Settlement & Outpost Terrain Stabilization (50-Block Radius):
+     - Implemented `SettlementTerrainStabilizer` and `StructureStartMixin` injecting at HEAD of `StructureStart.placeInChunk`.
+     - Analyzes 50-block horizontal radius and entire structure footprint for villages, empires, and outposts.
+     - Bridges open surface ravines, chasms, and shafts using biome-native materials (grass, sand, terracotta, podzol).
+     - Preserves underground caves with a 4-6 block solid stone vault roof for natural subterranean exploration.
+     - Projects secure foundation columns (`secureFoundationBox`) down to solid bedrock/stone and levels doorway entrances (`ensureAccessibleEntrance`).
+  2. Phase 2 — Container Loot Assignment & Badlands Pyramid Trap:
+     - Implemented `ContainerLootManager` associating structures with authentic loot tables (`VILLAGE_FISHER`, `VILLAGE_WEAPONSMITH`, `VILLAGE_BUTCHER`, `VILLAGE_TEMPLE`, `VILLAGE_CARTOGRAPHER`, `RUINED_PORTAL`).
+     - Fixed Explorify Badlands Pyramid structure NBT: converted palettes 27, 28, 29 to `minecraft:chest` while keeping palette 30 as `minecraft:trapped_chest`.
+     - Added `validateAndFixPyramidTrap` runtime invariant ensuring exactly 1 trapped chest and 3 regular chests with `DESERT_PYRAMID` loot table.
+     - Seeded containers in `ConstructionProject` and `DimensionalScarGenerator` on placement.
+  3. Phase 2 — Mob Behavior, Headroom & Navigation:
+     - Cavalry Safe Headroom: Added `findSafeOutdoorCavalrySpawn()` requiring >= 3.0m vertical clearance, clear sky view, and solid footing. Defers recruitment if no safe spot exists. Dismounts under low ceilings; mount UUID persisted without duplication.
+     - Enclosure & Cage Population: Implemented `EnclosurePopulationManager` populating starter herds (2-3 cows/sheep/pigs) inside empty village pens, and captives (villagers, iron golems, allays) in outpost cages. Grid keys prevent duplicate spawning on reload.
+     - Fence Gate Navigation AI: Implemented `FenceGateInteractGoal` for guards, archers, and cavalry. Supports bi-directional opening, multi-NPC coordination, auto-closure after passage, and explicitly protects livestock enclosures (`isLivestockGate`).
+  4. Phase 3 — Verification & Deployment:
+     - Expanded test suite to 104 tests (Tests 99-104 added). All 104/104 PASSED (`scripts/test.ps1`).
+     - All 8 gameplay playtest scenarios PASSED (`scripts/test_gameplay.ps1`).
+     - 60-second in-world Survival quickplay executed cleanly on dedicated instance LivingWorld.
+     - Packaged `build/libs/livingworld-0.2.9.jar` (464,707 bytes across 86 compiled classes) and deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.9.jar`.
+Files Modified/Created:
+  - `src/main/java/livingworld/worldgen/SettlementTerrainStabilizer.java` (CREATED)
+  - `src/main/java/livingworld/mixin/StructureStartMixin.java` (CREATED)
+  - `src/main/java/livingworld/worldgen/ContainerLootManager.java` (CREATED)
+  - `src/main/java/livingworld/ai/FenceGateInteractGoal.java` (CREATED)
+  - `src/main/java/livingworld/worldgen/EnclosurePopulationManager.java` (CREATED)
+  - `src/main/resources/data/explorify/structure/badlands_pyramid/whole.nbt` (CREATED)
+  - `src/main/resources/data/explorify/structures/badlands_pyramid/whole.nbt` (CREATED)
+  - `src/main/resources/livingworld.mixins.json`
+  - `src/main/java/livingworld/LivingWorldMod.java`
+  - `src/main/java/livingworld/entity/VillageGuardEntity.java`
+  - `src/main/java/livingworld/entity/VillageArcherEntity.java`
+  - `src/main/java/livingworld/entity/VillageCavalryEntity.java`
+  - `src/main/java/livingworld/faction/VillageGuardManager.java`
+  - `src/main/java/livingworld/settlement/ConstructionProject.java`
+  - `src/main/java/livingworld/settlement/EmpireManager.java`
+  - `src/main/java/livingworld/settlement/Settlement.java`
+  - `src/main/java/livingworld/settlement/SettlementManager.java`
+  - `src/main/java/livingworld/worldgen/DimensionalScarGenerator.java`
+  - `src/main/resources/fabric.mod.json`
+  - `scripts/build.ps1`
+  - `src/test/java/livingworld/LivingWorldTests.java`
+  - `docs/FEATURE_MATRIX.md`
+  - `decisions.md`
+  - `handoff.md`
+  - `flow.md`
+Outcome:
+  - Compiled and packaged `build/libs/livingworld-0.2.9.jar` (464,707 bytes across 86 classes).
+  - Deployed to `instances/LivingWorld/minecraft/mods/livingworld-0.2.9.jar`.
+  - 104/104 automated acceptance tests passed.
+  - 8/8 gameplay playtest scenarios passed.
+  - 60s in-world Survival quickplay simulation passed with 0 errors.
+  - Exactly 0 files in `assets/minecraft/*` (Vanilla Invariant strictly preserved).
+  - Push Hold strictly active. Zero pushes to remote repository. All commits local under `PrathamKapoor <prathamkapoor027@gmail.com>`.
 
 ### 2026-11-11T19:20:00Z — STEP 0025 — DONE
 Goal: Execute Version 0.2.8 Operation: Make the World Actually Alive (Stabilization & Quality Overhaul):
