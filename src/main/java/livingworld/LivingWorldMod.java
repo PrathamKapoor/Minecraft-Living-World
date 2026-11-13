@@ -251,9 +251,15 @@ public class LivingWorldMod implements ModInitializer {
             }
         });
 
-        // 8b. Natural Dimensional Scars Chunk Load Hook (Feature F19)
+        // 8b. Natural Dimensional Scars & Settlement Terrain Chunk Load Hook (Feature F19 & Phase 1)
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register((serverLevel, chunk, isNew) -> {
             livingworld.worldgen.DimensionalScarManager.get().onChunkLoad(serverLevel, chunk.getPos());
+            livingworld.worldgen.ContainerLootManager.get().onChunkLoad(serverLevel, chunk.getPos());
+            livingworld.worldgen.EnclosurePopulationManager.get().onChunkLoad(serverLevel, chunk.getPos());
+            Settlement nearSettlement = SettlementManager.get().getNearestSettlement(chunk.getPos().getMiddleBlockPosition(64));
+            if (nearSettlement != null && nearSettlement.isInSettlement(chunk.getPos().getMiddleBlockPosition(64))) {
+                livingworld.worldgen.SettlementTerrainStabilizer.get().stabilizeSettlement(serverLevel, nearSettlement.getCenter(), nearSettlement.getRadius(), null);
+            }
         });
 
         // 9. Server Lifecycle: World Save & Load Hooks
@@ -290,6 +296,9 @@ public class LivingWorldMod implements ModInitializer {
             SettlementManager.get().clear();
             ProtectionManager.get().clear();
             livingworld.worldgen.DimensionalScarManager.get().clear();
+            livingworld.worldgen.SettlementTerrainStabilizer.get().clear();
+            livingworld.worldgen.ContainerLootManager.get().clear();
+            livingworld.worldgen.EnclosurePopulationManager.get().clear();
             RaidTactics.get().clear();
         });
 
